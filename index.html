@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão Financeira Pessoal</title>
+    <style>
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-card: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        .dark {
+            --bg-primary: #0f172a;
+            --bg-card: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-primary); transition: background-color 0.3s, color 0.3s; padding: 20px; }
+        
+        /* Modal de Login / Proteção de Senha */
+        #loginOverlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999;
+        }
+        .login-box {
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 360px;
+            width: 90%;
+        }
+        .login-box h2 { margin-bottom: 12px; font-size: 1.3rem; }
+        .login-box p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px; }
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .login-box button:hover { background: var(--accent-hover); }
+
+        .container { max-width: 1200px; margin: 0 auto; display: none; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+        h1 { font-size: 1.5rem; font-weight: 700; }
+        .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        select, button, input { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font-size: 0.9rem; cursor: pointer; }
+        button.btn-primary { background: var(--accent); color: white; border: none; font-weight: 600; }
+        button.btn-primary:hover { background: var(--accent-hover); }
+        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: var(--bg-card); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color); }
+        .card-title { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px; }
+        .card-value { font-size: 1.3rem; font-weight: 700; }
+        .tabs-container { overflow-x: auto; margin-bottom: 20px; }
+        .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .tab-btn { background: none; border: none; padding: 8px 14px; border-radius: 6px; color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
+        .tab-btn.active { background: var(--accent); color: white; font-weight: 600; }
+        
+        .table-container { 
+            background: var(--bg-card); 
+            border-radius: 12px; 
+            border: 1px solid var(--border-color); 
+            overflow: auto; 
+            max-height: 60vh; 
+            margin-bottom: 24px; 
+        }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+        th, td { padding: 10px 14px; border-bottom: 1px solid var(--border-color); }
+        th { 
+            position: sticky; top: 0; 
+            background: var(--bg-card); 
+            color: var(--text-secondary); 
+            font-weight: 600; 
+            z-index: 10;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .val-entrada { color: var(--success); font-weight: 600; }
+        .val-saida { color: var(--danger); }
+        .actions-cell { display: flex; gap: 6px; }
+        .btn-sm { padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; }
+        .btn-edit { background: var(--border-color); }
+        @media (max-width: 600px) { body { padding: 10px; } header { flex-direction: column; align-items: flex-start; } }
+    </style>
+</head>
+<body>
+
+    <!-- Tela de Bloqueio por Senha -->
+    <div id="loginOverlay">
+        <div class="login-box">
+            <h2>Acesso Restrito</h2>
+            <p>Digite a senha para acessar o controle financeiro:</p>
+            <input type="password" id="passInput" placeholder="Senha" onkeypress="if(event.key==='Enter') checkPass()">
+            <button onclick="checkPass()">Entrar</button>
+        </div>
+    </div>
+
+    <!-- Conteúdo Principal do Aplicativo -->
+    <div class="container" id="appContent">
+        <header>
+            <h1>Controle de Bancos & Gastos</h1>
+            <div class="controls">
+                <select id="yearSelect" onchange="changeYear()"></select>
+                <button onclick="addYear()">+ Novo Ano</button>
+                <button class="btn-primary" onclick="openAddModal()">+ Lançamento</button>
+                <button onclick="exportData()">Exportar Backup (JSON)</button>
+                <button onclick="document.getElementById('importFile').click()">Importar Backup</button>
+                <input type="file" id="importFile" style="display:none" onchange="importData(event)" accept=".json">
+                <button onclick="toggleTheme()">🌓 Tema</button>
+            </div>
+        </header>
+
+        <div class="dashboard-cards">
+            <div class="card">
+                <div class="card-title">Saldo Final do Mês</div>
+                <div class="card-value" id="cardSaldo">R$ 0,00</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Entradas / Rendimentos</div>
+                <div class="card-value val-entrada" id="cardEntradas">R$ 0,00</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Saídas / Despesas</div>
+                <div class="card-value val-saida" id="cardSaidas">R$ 0,00</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Balanço Líquido</div>
+                <div class="card-value" id="cardBalanco">R$ 0,00</div>
+            </div>
+        </div>
+
+        <div class="tabs-container">
+            <div class="tabs" id="monthTabs"></div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição / Histórico</th>
+                        <th>Valor (R$)</th>
+                        <th>Saldo Resultante</th>
+                        <th>Tipo (Manual / Débito / DDA)</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const APP_PASSWORD = "17Junho00!"; // Altere sua senha de 8 caracteres aqui
+
+        function checkPass() {
+            const val = document.getElementById('passInput').value;
+            if (val === APP_PASSWORD) {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('appContent').style.display = 'block';
+                init();
+            } else {
+                alert("Senha incorreta!");
+                document.getElementById('passInput').value = '';
+            }
+        }
+
+        const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+        let currentYear = 2026;
+        let currentMonthIdx = 0;
+
+        const defaultData = {"2026": {"JANEIRO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 2402.28, "tipo": ""}, {"data": "2026-01-02", "historico": "Extensor infravermelho", "valor": 21.0, "saldo": 2381.28, "tipo": "Manual"}, {"data": "2026-01-05", "historico": "Salário", "valor": -6473.17, "saldo": 8854.45, "tipo": "Manual"}, {"data": "2026-01-05", "historico": "Rendimento", "valor": -0.43, "saldo": 8854.88, "tipo": "Manual"}, {"data": "2026-01-05", "historico": "Investimento", "valor": 900.0, "saldo": 7954.88, "tipo": "Manual"}, {"data": "2026-01-07", "historico": "Kotas - Youtube premium", "valor": 11.16, "saldo": 7943.72, "tipo": "Manual"}, {"data": "2026-01-07", "historico": "Kotas - Deezer", "valor": 10.83, "saldo": 7932.89, "tipo": "Manual"}, {"data": "2026-01-07", "historico": "Projeto marmitas", "valor": 350.0, "saldo": 7582.89, "tipo": "Manual"}, {"data": "2026-01-07", "historico": "Banhos bibi", "valor": 165.0, "saldo": 7417.89, "tipo": "Manual"}, {"data": "2026-01-08", "historico": "Dafiti - calça mizuno", "valor": 109.78, "saldo": 7308.11, "tipo": "Manual"}, {"data": "2026-01-09", "historico": "Rendimento", "valor": -0.07, "saldo": 7308.18, "tipo": "Manual"}, {"data": "2026-01-12", "historico": "Cond.", "valor": 2227.78, "saldo": 5080.4, "tipo": "DDA"}, {"data": "2026-01-12", "historico": "Hyper game - Game Pass ultimate", "valor": 152.99, "saldo": 4927.41, "tipo": "Manual"}, {"data": "2026-01-12", "historico": "Mercado livre - calças tactel", "valor": 154.47, "saldo": 4772.94, "tipo": "Manual"}, {"data": "2026-01-13", "historico": "Transfer Zikita", "valor": 500.0, "saldo": 4272.94, "tipo": "Manual"}, {"data": "2026-01-14", "historico": "Mercado livre - camiseta hering H+", "valor": 34.28, "saldo": 4238.66, "tipo": "Manual"}, {"data": "2026-01-14", "historico": "Relógio Casio GW-B5600", "valor": 980.0, "saldo": 3258.66, "tipo": "Manual"}, {"data": "2026-01-15", "historico": "Salário", "valor": -7389.64, "saldo": 10648.3, "tipo": "Manual"}, {"data": "2026-01-15", "historico": "IPVA 1/5", "valor": 994.11, "saldo": 9654.19, "tipo": "Manual"}, {"data": "2026-01-15", "historico": "AACD", "valor": 20.0, "saldo": 9634.19, "tipo": "Manual"}, {"data": "2026-01-16", "historico": "Rendimento", "valor": -0.42, "saldo": 9634.61, "tipo": "Manual"}, {"data": "2026-01-15", "historico": "Investimento", "valor": 6790.0, "saldo": 2844.61, "tipo": "Manual"}, {"data": "2026-01-16", "historico": "Dantas - Pães", "valor": 60.0, "saldo": 2784.61, "tipo": "Manual"}, {"data": "2026-01-20", "historico": "Bradesco", "valor": 9.99, "saldo": 2774.62, "tipo": "Débito"}, {"data": "2026-01-20", "historico": "Conta luz - final do dia", "valor": 304.11, "saldo": 2470.51, "tipo": "Débito"}, {"data": "2026-01-20", "historico": "Nubank", "valor": 664.44, "saldo": 1806.07, "tipo": "DDA"}, {"data": "2026-01-21", "historico": "Conv. Ir. tata", "valor": 522.63, "saldo": 1283.44, "tipo": "Manual"}, {"data": "2026-01-21", "historico": "Amazon - Chinelo Ryder", "valor": 45.9, "saldo": 1237.54, "tipo": "Manual"}, {"data": "2026-01-21", "historico": "Vivo fibra - final do dia", "valor": 302.1, "saldo": 935.44, "tipo": "Débito"}, {"data": "2026-01-21", "historico": "Vivo cel - final do dia", "valor": 35.0, "saldo": 900.44, "tipo": "Débito"}, {"data": "2026-01-23", "historico": "Rendimento", "valor": -0.19, "saldo": 900.63, "tipo": "Manual"}, {"data": "2026-01-23", "historico": "Reembolso sulamerica", "valor": -333.68, "saldo": 1234.31, "tipo": "Manual"}, {"data": "2026-01-23", "historico": "Transfer Zikita", "valor": 333.0, "saldo": 901.31, "tipo": "Manual"}, {"data": "2026-01-27", "historico": "CCB", "valor": 750.0, "saldo": 151.31, "tipo": "Manual"}, {"data": "2026-01-30", "historico": "Rendimento", "valor": -0.11, "saldo": 151.42, "tipo": "Manual"}], "FEVEREIRO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 151.42, "tipo": ""}, {"data": "2026-02-05", "historico": "Salário - menor por causa da previdencia", "valor": -5977.38, "saldo": 6128.8, "tipo": "Manual"}, {"data": "2026-02-05", "historico": "Invest.", "valor": 950.0, "saldo": 5178.8, "tipo": "Manual"}, {"data": "2026-02-05", "historico": "Transfer mãe - bolo", "valor": 300.0, "saldo": 4878.8, "tipo": "Manual"}, {"data": "2026-02-06", "historico": "Banho Bibi", "valor": 165.0, "saldo": 4713.8, "tipo": "Manual"}, {"data": "2026-02-06", "historico": "Rendimento", "valor": -0.01, "saldo": 4713.81, "tipo": "Manual"}, {"data": "2026-02-06", "historico": "Mercado livre - tapete higiênico", "valor": 69.99, "saldo": 4643.82, "tipo": "Manual"}, {"data": "2026-02-09", "historico": "Transfer Nu - Saque", "valor": 40.0, "saldo": 4603.82, "tipo": "Manual"}, {"data": "2026-02-09", "historico": "Compra canetas bic", "valor": 5.0, "saldo": 4598.82, "tipo": "Manual"}, {"data": "2026-02-06", "historico": "Farmácia - enxaguante", "valor": 22.08, "saldo": 4576.74, "tipo": "Manual"}, {"data": "2026-02-10", "historico": "Kotas - Youtube premium", "valor": 11.16, "saldo": 4565.58, "tipo": "Manual"}, {"data": "2026-02-10", "historico": "Kotas - Deezer", "valor": 10.83, "saldo": 4554.75, "tipo": "Manual"}, {"data": "2026-02-10", "historico": "Drogasil - Vita Supra", "valor": 56.9, "saldo": 4497.85, "tipo": "Manual"}, {"data": "2026-02-10", "historico": "Cond.", "valor": 2357.58, "saldo": 2140.27, "tipo": "DDA"}, {"data": "2026-02-11", "historico": "Magalu - Office 365 personal", "valor": 133.9, "saldo": 2006.37, "tipo": "Manual"}, {"data": "2026-02-13", "historico": "Salário", "valor": -7389.64, "saldo": 9396.01, "tipo": "Manual"}, {"data": "2026-02-13", "historico": "Projeto marmitas", "valor": 350.0, "saldo": 9046.01, "tipo": "Manual"}, {"data": "2026-02-13", "historico": "Rendimento", "valor": -0.2, "saldo": 9046.21, "tipo": "Manual"}, {"data": "2026-02-18", "historico": "AACD", "valor": 20.0, "saldo": 9026.21, "tipo": "Manual"}, {"data": "2026-02-18", "historico": "Nubank", "valor": 1781.51, "saldo": 7244.7, "tipo": "DDA"}, {"data": "2026-02-19", "historico": "IPVA 2/5", "valor": 994.11, "saldo": 6250.59, "tipo": "Manual"}, {"data": "2026-02-20", "historico": "Bradesco", "valor": 9.99, "saldo": 6240.6, "tipo": "Débito"}, {"data": "2026-02-20", "historico": "Enel - final do dia", "valor": 169.01, "saldo": 6071.59, "tipo": "Débito"}, {"data": "2026-02-20", "historico": "Rendimento", "valor": -0.16, "saldo": 6071.75, "tipo": "Manual"}, {"data": "2026-02-23", "historico": "Conv. Ir. Tata", "valor": 522.63, "saldo": 5549.12, "tipo": "Manual"}, {"data": "2026-02-23", "historico": "Invest. XP", "valor": 4000.0, "saldo": 1549.12, "tipo": "Manual"}, {"data": "2026-02-23", "historico": "Lava rápido", "valor": 65.0, "saldo": 1484.12, "tipo": "Manual"}, {"data": "2026-02-23", "historico": "Vivo Cel", "valor": 35.0, "saldo": 1449.12, "tipo": "Débito"}, {"data": "2026-02-23", "historico": "Vivo Fibra", "valor": 302.1, "saldo": 1147.02, "tipo": "Débito"}, {"data": "2026-02-25", "historico": "Cabelo", "valor": 65.0, "saldo": 1082.02, "tipo": "Manual"}, {"data": "2026-02-26", "historico": "CCB", "valor": 750.0, "saldo": 332.02, "tipo": "Manual"}, {"data": "2026-02-27", "historico": "Tosa completa - Bibi", "valor": 70.0, "saldo": 262.02, "tipo": "Manual"}, {"data": "2026-02-27", "historico": "Rendimento", "valor": -0.06, "saldo": 262.08, "tipo": "Manual"}], "MARÇO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 262.08, "tipo": ""}, {"data": "2026-03-02", "historico": "Pix Dantas - Bolo", "valor": 30.0, "saldo": 232.08, "tipo": "Manual"}, {"data": "2026-03-04", "historico": "Amazon - camiseta", "valor": 67.4, "saldo": 164.68, "tipo": "Manual"}, {"data": "2026-03-05", "historico": "Salário - dissidio jan/fev/mar", "valor": -6283.62, "saldo": 6448.3, "tipo": "Manual"}, {"data": "2026-03-05", "historico": "Invest.", "valor": 950.0, "saldo": 5498.3, "tipo": "Manual"}, {"data": "2026-03-05", "historico": "Magalu - Office 365", "valor": 103.9, "saldo": 5394.4, "tipo": "Manual"}, {"data": "2026-03-06", "historico": "Rendimento", "valor": -0.06, "saldo": 5394.46, "tipo": "Manual"}, {"data": "2026-03-09", "historico": "Pix - filha Cássia", "valor": 16.0, "saldo": 5378.46, "tipo": "Manual"}, {"data": "2026-03-09", "historico": "Kotas - Youtube premium", "valor": 11.16, "saldo": 5367.3, "tipo": "Manual"}, {"data": "2026-03-09", "historico": "Kotas - Deezer", "valor": 10.83, "saldo": 5356.47, "tipo": "Manual"}, {"data": "2026-03-10", "historico": "Cond.", "valor": 2197.93, "saldo": 3158.54, "tipo": "DDA"}, {"data": "2026-03-10", "historico": "Banho Bibi", "valor": 165.0, "saldo": 2993.54, "tipo": "Manual"}, {"data": "2026-03-13", "historico": "Rendimento", "valor": -0.11, "saldo": 2993.65, "tipo": "Manual"}, {"data": "2026-03-13", "historico": "Salário", "valor": -7454.13, "saldo": 10447.78, "tipo": "Manual"}, {"data": "2026-03-16", "historico": "Amazon - controle xbox", "valor": 299.0, "saldo": 10148.78, "tipo": "Manual"}, {"data": "2026-03-16", "historico": "IPVA 3/5", "valor": 994.11, "saldo": 9154.67, "tipo": "Manual"}, {"data": "2026-03-16", "historico": "AACD", "valor": 25.0, "saldo": 9129.67, "tipo": "Manual"}, {"data": "2026-03-18", "historico": "Transfer Orga - marmitas", "valor": 350.0, "saldo": 8779.67, "tipo": "Manual"}, {"data": "2026-03-18", "historico": "Mercado livre - tapetinho", "valor": 69.99, "saldo": 8709.68, "tipo": "Manual"}, {"data": "2026-03-18", "historico": "Enel - final do dia", "valor": 159.15, "saldo": 8550.53, "tipo": "Débito"}, {"data": "2026-03-19", "historico": "Nubank", "valor": 2143.71, "saldo": 6406.82, "tipo": "DDA"}, {"data": "2026-03-20", "historico": "Bradesco", "valor": 9.99, "saldo": 6396.83, "tipo": "Débito"}, {"data": "2026-03-23", "historico": "Rendimento", "valor": -0.2, "saldo": 6397.03, "tipo": "Manual"}, {"data": "2026-03-23", "historico": "Transfer Dantas - Café Bras", "valor": 15.0, "saldo": 6382.03, "tipo": "Manual"}, {"data": "2026-03-23", "historico": "Transfer Zoio - Almoço", "valor": 35.0, "saldo": 6347.03, "tipo": "Manual"}, {"data": "2026-03-23", "historico": "Conv. Ir. Tata", "valor": 522.63, "saldo": 5824.4, "tipo": "Manual"}, {"data": "2026-03-23", "historico": "Vivo fibra - final do dia", "valor": 302.1, "saldo": 5522.3, "tipo": "Débito"}, {"data": "2026-03-23", "historico": "Vivo cel - final do dia", "valor": 35.0, "saldo": 5487.3, "tipo": "Débito"}, {"data": "2026-03-23", "historico": "CCB", "valor": 400.0, "saldo": 5087.3, "tipo": "Manual"}, {"data": "2026-03-24", "historico": "Invest.", "valor": 4000.0, "saldo": 1087.3, "tipo": "Manual"}, {"data": "2026-03-25", "historico": "Barbeiro", "valor": 65.0, "saldo": 1022.3, "tipo": "Manual"}, {"data": "2026-03-27", "historico": "Rendimento", "valor": -0.12, "saldo": 1022.42, "tipo": "Manual"}, {"data": "2026-03-30", "historico": "CCB - especial", "valor": 350.0, "saldo": 672.42, "tipo": "Manual"}, {"data": "2026-03-31", "historico": "Magalu - Office 365", "valor": 91.23, "saldo": 581.19, "tipo": "Manual"}], "ABRIL": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 581.19, "tipo": ""}, {"data": "2026-04-02", "historico": "Salário", "valor": -6146.29, "saldo": 6727.48, "tipo": "Manual"}, {"data": "2026-04-02", "historico": "Resgate Vee", "valor": -0.47, "saldo": 6727.95, "tipo": "Manual"}, {"data": "2026-04-02", "historico": "Rendimento", "valor": -0.02, "saldo": 6727.97, "tipo": "Manual"}, {"data": "2026-04-02", "historico": "Invet.", "valor": 950.0, "saldo": 5777.97, "tipo": "Manual"}, {"data": "2026-04-06", "historico": "Transfer Michel - necessidade MG", "valor": 400.0, "saldo": 5377.97, "tipo": "Manual"}, {"data": "2026-04-07", "historico": "Kotas - Youtube premium", "valor": 11.16, "saldo": 5366.81, "tipo": "Manual"}, {"data": "2026-04-07", "historico": "Kotas - Deezer", "valor": 10.83, "saldo": 5355.98, "tipo": "Manual"}, {"data": "2026-04-07", "historico": "Banho Bibi", "valor": 165.0, "saldo": 5190.98, "tipo": "Manual"}, {"data": "2026-04-08", "historico": "Reembolso mercado livre", "valor": -14.0, "saldo": 5204.98, "tipo": "Manual"}, {"data": "2026-04-08", "historico": "Transfer Zoio - PFC", "valor": 180.0, "saldo": 5024.98, "tipo": "Manual"}, {"data": "2026-04-09", "historico": "Lava rápido", "valor": 70.0, "saldo": 4954.98, "tipo": "Manual"}, {"data": "2026-04-10", "historico": "Cond.", "valor": 2135.38, "saldo": 2819.6, "tipo": "DDA"}, {"data": "2026-04-10", "historico": "Rendimento", "valor": -0.12, "saldo": 2819.72, "tipo": "Manual"}, {"data": "2026-04-13", "historico": "Venda relógio Casio G-Shock GW-B5600", "valor": -800.0, "saldo": 3619.72, "tipo": "Manual"}, {"data": "2026-04-13", "historico": "Compra dolares", "valor": 2000.0, "saldo": 1619.72, "tipo": "Manual"}, {"data": "2026-04-13", "historico": "Transfer Zikita - funeral Alexandre", "valor": 500.0, "saldo": 1119.72, "tipo": "Manual"}, {"data": "2026-04-15", "historico": "IPVA 4/5", "valor": 994.11, "saldo": 125.61, "tipo": "Manual"}, {"data": "2026-04-15", "historico": "AACD", "valor": 25.0, "saldo": 100.61, "tipo": "Manual"}, {"data": "2026-04-15", "historico": "Salário", "valor": -7437.81, "saldo": 7538.42, "tipo": "Manual"}, {"data": "2026-04-15", "historico": "Transfer Orga - marmitas", "valor": 350.0, "saldo": 7188.42, "tipo": "Manual"}, {"data": "2026-04-17", "historico": "Invest - PicPay", "valor": 2000.0, "saldo": 5188.42, "tipo": "Manual"}, {"data": "2026-04-17", "historico": "Rendimento", "valor": -0.04, "saldo": 5188.46, "tipo": "Manual"}, {"data": "2026-04-17", "historico": "ML - meias lupo", "valor": 43.45, "saldo": 5145.01, "tipo": "Manual"}, {"data": "2026-04-20", "historico": "Amazon - tapete bibi", "valor": 68.9, "saldo": 5076.11, "tipo": "Manual"}, {"data": "2026-04-20", "historico": "Bradesco", "valor": 9.99, "saldo": 5066.12, "tipo": "Débito"}, {"data": "2026-04-20", "historico": "Nubank", "valor": 1982.33, "saldo": 3083.79, "tipo": "Manual"}, {"data": "2026-04-20", "historico": "Enel - final do dia", "valor": 179.28, "saldo": 2904.51, "tipo": "Débito"}, {"data": "2026-04-22", "historico": "Conv. Tata", "valor": 554.3, "saldo": 2350.21, "tipo": "Manual"}, {"data": "2026-04-22", "historico": "Vivo fibra - final do dia", "valor": 302.1, "saldo": 2048.11, "tipo": "Débito"}, {"data": "2026-04-22", "historico": "Vivo cel - final do dia", "valor": 41.0, "saldo": 2007.11, "tipo": "Débito"}, {"data": "2026-04-24", "historico": "Rendimento", "valor": -0.06, "saldo": 2007.17, "tipo": "Manual"}, {"data": "2026-04-24", "historico": "Barbeiro", "valor": 65.0, "saldo": 1942.17, "tipo": "Manual"}, {"data": "2026-04-24", "historico": "CCB", "valor": 750.0, "saldo": 1192.17, "tipo": "Manual"}, {"data": "2026-04-28", "historico": "Ali - Carregador múltiplo", "valor": 268.2, "saldo": 923.97, "tipo": "Manual"}, {"data": "2026-04-30", "historico": "Rendimento", "valor": -0.05, "saldo": 924.02, "tipo": "Manual"}], "MAIO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 924.02, "tipo": ""}, {"data": "2026-05-04", "historico": "Pix - Omoda", "valor": 1000.0, "saldo": -75.98, "tipo": "Manual"}, {"data": "2026-05-05", "historico": "Salário", "valor": -6146.29, "saldo": 6070.31, "tipo": "Manual"}, {"data": "2026-05-05", "historico": "Transfer Zoio - máquina de costura", "valor": 800.0, "saldo": 5270.31, "tipo": "Manual"}, {"data": "2026-05-05", "historico": "Invest.", "valor": 950.0, "saldo": 4320.31, "tipo": "Manual"}, {"data": "2026-05-06", "historico": "Resina - parabrisa", "valor": 280.0, "saldo": 4040.31, "tipo": "Manual"}, {"data": "2026-05-07", "historico": "Kotas - Youtube", "valor": 11.16, "saldo": 4029.15, "tipo": "Manual"}, {"data": "2026-05-07", "historico": "Kotas - Deezer", "valor": 10.83, "saldo": 4018.32, "tipo": "Manual"}, {"data": "2026-05-08", "historico": "Rendimento", "valor": -0.04, "saldo": 4018.36, "tipo": "Manual"}, {"data": "2026-05-11", "historico": "Transfer Zoio - almoço", "valor": 60.0, "saldo": 3958.36, "tipo": "Manual"}, {"data": "2026-05-11", "historico": "Cond.", "valor": 2346.62, "saldo": 1611.74, "tipo": "DDA"}, {"data": "2026-05-11", "historico": "Almoço", "valor": 62.48, "saldo": 1549.26, "tipo": "Manual"}, {"data": "2026-05-11", "historico": "IPVA 5/5", "valor": 994.11, "saldo": 555.15, "tipo": "Manual"}, {"data": "2026-05-11", "historico": "Controle xbox", "valor": 375.0, "saldo": 180.15, "tipo": "Manual"}, {"data": "2026-05-15", "historico": "Salário", "valor": -7437.81, "saldo": 7617.96, "tipo": "Manual"}, {"data": "2026-05-15", "historico": "Banho Bibi", "valor": 165.0, "saldo": 7452.96, "tipo": "Manual"}, {"data": "2026-05-15", "historico": "Rendimento", "valor": -0.01, "saldo": 7452.97, "tipo": "Manual"}, {"data": "2026-05-18", "historico": "Qualidoc - enxaguante", "valor": 32.57, "saldo": 7420.4, "tipo": "Manual"}, {"data": "2026-05-18", "historico": "Paguemenos - chocolates", "valor": 18.88, "saldo": 7401.52, "tipo": "Manual"}, {"data": "2026-05-19", "historico": "Amazon - toalhas bibi", "valor": 53.57, "saldo": 7347.95, "tipo": "Manual"}, {"data": "2026-05-19", "historico": "Nubank", "valor": 2720.0, "saldo": 4627.95, "tipo": "Manual"}, {"data": "2026-05-19", "historico": "Ali - tranqueiras", "valor": 43.95, "saldo": 4584.0, "tipo": "Manual"}, {"data": "2026-05-20", "historico": "Bradesco", "valor": 9.99, "saldo": 4574.01, "tipo": "Débito"}, {"data": "2026-05-20", "historico": "Conta energia - final do dia", "valor": 159.8, "saldo": 4414.21, "tipo": "Débito"}, {"data": "2026-05-21", "historico": "Conv. Tata", "valor": 554.3, "saldo": 3859.91, "tipo": "Manual"}, {"data": "2026-05-21", "historico": "Vivo fibra - final do dia", "valor": 302.1, "saldo": 3557.81, "tipo": "Débito"}, {"data": "2026-05-21", "historico": "Vivo cel - final do dia", "valor": 13.66, "saldo": 3544.15, "tipo": "Débito"}, {"data": "2026-05-21", "historico": "Pix - Marcos - tag", "valor": 50.0, "saldo": 3494.15, "tipo": "Manual"}, {"data": "2026-05-21", "historico": "Férias - uma semana", "valor": -1276.72, "saldo": 4770.87, "tipo": "Manual"}, {"data": "2026-05-22", "historico": "AACD", "valor": 25.0, "saldo": 4745.87, "tipo": "Manual"}, {"data": "2026-05-22", "historico": "Rendimento", "valor": -0.09, "saldo": 4745.96, "tipo": "Manual"}, {"data": "2026-05-25", "historico": "Cabelo", "valor": 65.0, "saldo": 4680.96, "tipo": "Manual"}, {"data": "2026-05-25", "historico": "Gasolina", "valor": 262.37, "saldo": 4418.59, "tipo": "Manual"}, {"data": "2026-05-25", "historico": "Almoço ", "valor": 71.5, "saldo": 4347.09, "tipo": "Manual"}, {"data": "2026-05-25", "historico": "Queijos", "valor": 100.0, "saldo": 4247.09, "tipo": "Manual"}, {"data": "2026-05-25", "historico": "Açaí", "valor": 20.0, "saldo": 4227.09, "tipo": "Manual"}, {"data": "2026-05-26", "historico": "Passeio Jetski", "valor": 350.0, "saldo": 3877.09, "tipo": "Manual"}, {"data": "2026-05-26", "historico": "Menthos", "valor": 20.0, "saldo": 3857.09, "tipo": "Manual"}, {"data": "2026-05-28", "historico": "Búzios gastos hotel", "valor": 728.02, "saldo": 3129.07, "tipo": "Manual"}, {"data": "2026-05-29", "historico": "Restituição IR", "valor": -591.93, "saldo": 3721.0, "tipo": "Manual"}, {"data": "2026-05-29", "historico": "Lava-rápido ", "valor": 70.0, "saldo": 3651.0, "tipo": "Manual"}, {"data": "2026-05-29", "historico": "Rendimento", "valor": -0.12, "saldo": 3651.12, "tipo": "Manual"}], "JUNHO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 3651.12, "tipo": ""}, {"data": "2026-06-01", "historico": "FGTS - Saque aniversário", "valor": -3772.34, "saldo": 7423.46, "tipo": "Manual"}, {"data": "2026-06-01", "historico": "Amazon - capa chave Omoda 5", "valor": 78.99, "saldo": 7344.47, "tipo": "Manual"}, {"data": "2026-06-01", "historico": "CCB - Maio", "valor": 750.0, "saldo": 6594.47, "tipo": "Manual"}, {"data": "2026-06-01", "historico": "Amazon - tapetes Bibi", "valor": 63.16, "saldo": 6531.31, "tipo": "Manual"}, {"data": "2026-06-02", "historico": "Banhos Bibi", "valor": 165.0, "saldo": 6366.31, "tipo": "Manual"}, {"data": "2026-06-02", "historico": "Transfer Zika - Conserto aquecedor", "valor": 360.0, "saldo": 6006.31, "tipo": "Manual"}, {"data": "2026-06-02", "historico": "IOF", "valor": 0.3, "saldo": 6006.01, "tipo": "Manual"}, {"data": "2026-06-02", "historico": "Devolução conserto aquecedor", "valor": -350.0, "saldo": 6356.01, "tipo": "Manual"}, {"data": "2026-06-03", "historico": "Transfer Zoio - máquina de costura", "valor": 700.0, "saldo": 5656.01, "tipo": "Manual"}, {"data": "2026-06-05", "historico": "Rendimento", "valor": -0.11, "saldo": 5656.12, "tipo": "Manual"}, {"data": "2026-06-05", "historico": "Farmácia", "valor": 84.96, "saldo": 5571.16, "tipo": "Manual"}, {"data": "2026-06-05", "historico": "Salário menos férias", "valor": -5568.39, "saldo": 11139.55, "tipo": "Manual"}, {"data": "2026-06-05", "historico": "Invest", "valor": 950.0, "saldo": 10189.55, "tipo": "Manual"}, {"data": "2026-06-05", "historico": "Invest", "valor": 5000.0, "saldo": 5189.55, "tipo": "Manual"}, {"data": "2026-06-08", "historico": "Gasolina", "valor": 95.0, "saldo": 5094.55, "tipo": "Manual"}, {"data": "2026-06-08", "historico": "Transfer Orga - marmitas", "valor": 350.0, "saldo": 4744.55, "tipo": "Manual"}, {"data": "2026-06-08", "historico": "Farmácia", "valor": 28.0, "saldo": 4716.55, "tipo": "Manual"}, {"data": "2026-06-08", "historico": "Petz - ração", "valor": 99.6, "saldo": 4616.95, "tipo": "Manual"}, {"data": "2026-06-08", "historico": "Lava-rápido", "valor": 70.0, "saldo": 4546.95, "tipo": "Manual"}, {"data": "2026-06-10", "historico": "Cond.", "valor": 2324.58, "saldo": 2222.37, "tipo": "DDA"}, {"data": "2026-06-10", "historico": "Kotas - Youtube", "valor": 11.16, "saldo": 2211.21, "tipo": "Manual"}, {"data": "2026-06-10", "historico": "Kotas - Deezer", "valor": 10.83, "saldo": 2200.38, "tipo": "Manual"}, {"data": "2026-06-12", "historico": "Omoda 01/24", "valor": 2076.69, "saldo": 123.69, "tipo": "Manual"}, {"data": "2026-06-12", "historico": "Rendimento", "valor": -0.11, "saldo": 123.8, "tipo": "Manual"}, {"data": "2026-06-15", "historico": "AACD", "valor": 25.0, "saldo": 98.8, "tipo": "Manual"}, {"data": "2026-06-15", "historico": "Salário menos férias", "valor": -5652.28, "saldo": 5751.08, "tipo": "Manual"}, {"data": "2026-06-18", "historico": "Nubank", "valor": 3674.29, "saldo": 2076.79, "tipo": "Manual"}, {"data": "2026-06-19", "historico": "Rendimento", "valor": -0.08, "saldo": 2076.87, "tipo": "Manual"}, {"data": "2026-06-22", "historico": "Conta luz - final do dia", "valor": 130.29, "saldo": 1946.58, "tipo": "Débito"}, {"data": "2026-06-22", "historico": "Vivo fibra - final do dia", "valor": 323.21, "saldo": 1623.37, "tipo": "Débito"}, {"data": "2026-06-22", "historico": "Bradesco", "valor": 9.99, "saldo": 1613.38, "tipo": "Débito"}, {"data": "2026-06-22", "historico": "Conv. Tata", "valor": 554.3, "saldo": 1059.08, "tipo": "Manual"}, {"data": "2026-06-22", "historico": "Correios - caixa para devolução de camisa", "valor": 8.7, "saldo": 1050.38, "tipo": "Manual"}, {"data": "2026-06-26", "historico": "Cabelo", "valor": 65.0, "saldo": 985.38, "tipo": "Manual"}, {"data": "2026-06-29", "historico": "Borracharia", "valor": 60.0, "saldo": 925.38, "tipo": "Manual"}, {"data": "2026-06-29", "historico": "CCB - nível Brasil", "valor": 400.0, "saldo": 525.38, "tipo": "Manual"}, {"data": "2026-06-29", "historico": "CCB", "valor": 350.0, "saldo": 175.38, "tipo": "Manual"}, {"data": "2026-06-30", "historico": "13o - primaira parcela", "valor": -3105.5, "saldo": 3280.88, "tipo": "Manual"}], "JULHO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 3280.88, "tipo": ""}, {"data": "2026-07-01", "historico": "Centauro - jaqueta corta vento", "valor": 162.89, "saldo": 3117.99, "tipo": "Manual"}, {"data": "2026-07-02", "historico": "Invest", "valor": 3000.0, "saldo": 117.99, "tipo": "Manual"}, {"data": "2026-07-03", "historico": "Salário", "valor": -6046.91, "saldo": 6164.9, "tipo": "Manual"}, {"data": "2026-07-03", "historico": "Rendimento", "valor": -0.02, "saldo": 6164.92, "tipo": "Manual"}, {"data": "2026-07-03", "historico": "Amazon - moleton blusa", "valor": 72.3, "saldo": 6092.62, "tipo": "Manual"}, {"data": "2026-07-03", "historico": "Invest", "valor": 950.0, "saldo": 5142.62, "tipo": "Manual"}, {"data": "2026-07-03", "historico": "Banhos bibi", "valor": 165.0, "saldo": 4977.62, "tipo": "Manual"}, {"data": "2026-07-08", "historico": "Kotas - Deezer", "valor": 10.33, "saldo": 4967.29, "tipo": "Manual"}, {"data": "2026-07-08", "historico": "Kotas - Youtube", "valor": 10.66, "saldo": 4956.63, "tipo": "Manual"}, {"data": "2026-07-08", "historico": "Amazon - moleton calça", "valor": 75.09, "saldo": 4881.54, "tipo": "Manual"}, {"data": "2026-07-10", "historico": "Cond.", "valor": 2210.49, "saldo": 2671.05, "tipo": "DDA"}, {"data": "2026-07-10", "historico": "Rendimento", "valor": -0.07, "saldo": 2671.12, "tipo": "Manual"}, {"data": "2026-07-13", "historico": "Omoda 02/24", "valor": 2076.69, "saldo": 594.43, "tipo": "Manual"}, {"data": "2026-07-13", "historico": "Estacionamento", "valor": 15.0, "saldo": 579.43, "tipo": "Manual"}, {"data": "2026-07-15", "historico": "AACD", "valor": 25.0, "saldo": 554.43, "tipo": "Manual"}, {"data": "2026-07-15", "historico": "Salário", "valor": -7437.81, "saldo": 7992.24, "tipo": "Manual"}, {"data": "2026-07-15", "historico": "Nubank", "valor": 1964.08, "saldo": 6028.16, "tipo": "Manual"}, {"data": "2026-07-17", "historico": "Apple Watch 11", "valor": 2630.0, "saldo": 3398.16, "tipo": "Manual"}, {"data": "2026-07-17", "historico": "Rendimento", "valor": -0.04, "saldo": 3398.2, "tipo": "Manual"}, {"data": "2026-07-20", "historico": "Bradesco", "valor": 9.99, "saldo": 3388.21, "tipo": "Débito"}, {"data": "2026-07-20", "historico": "Lava rápido", "valor": 80.0, "saldo": 3308.21, "tipo": "Manual"}, {"data": "2026-07-20", "historico": "Qualidoc - Herbissimo", "valor": 29.55, "saldo": 3278.66, "tipo": "Manual"}, {"data": "2026-07-20", "historico": "Amazon - Epoclair", "valor": 55.84, "saldo": 3222.82, "tipo": "Manual"}, {"data": "2026-07-20", "historico": "Ali - Reembolso parcial carregador", "valor": -87.73, "saldo": 3310.55, "tipo": "Manual"}, {"data": "2026-07-20", "historico": "Ali - novo carregador", "valor": 233.47, "saldo": 3077.08, "tipo": "Manual"}, {"data": "2026-07-20", "historico": "Conta energia - final do dia", "valor": 165.4, "saldo": 2911.68, "tipo": "Débito"}, {"data": "2026-07-21", "historico": "Conv. Tata", "valor": 554.3, "saldo": 2357.38, "tipo": "Manual"}, {"data": "2026-07-21", "historico": "Vivo fibra - final do dia", "valor": 323.21, "saldo": 2034.17, "tipo": "Débito"}, {"data": "2026-07-24", "historico": "Mercado livre - lixeira", "valor": 50.18, "saldo": 1983.99, "tipo": "Manual"}, {"data": "2026-07-24", "historico": "Rendimento", "valor": -0.03, "saldo": 1984.02, "tipo": "Manual"}, {"data": "2026-07-29", "historico": "Amazon - camisa polo compra USA", "valor": 104.16, "saldo": 1879.86, "tipo": "Manual"}, {"data": "2026-07-29", "historico": "CCB", "valor": 750.0, "saldo": 1129.86, "tipo": "Manual"}, {"data": "2026-07-29", "historico": "Amazon - camiseta", "valor": 74.32, "saldo": 1055.54, "tipo": "Manual"}, {"data": "2026-07-31", "historico": "Amazon - Copo Camelbak", "valor": 81.13, "saldo": 974.41, "tipo": "Manual"}, {"data": "2026-07-31", "historico": "Rendimento", "valor": -0.04, "saldo": 974.45, "tipo": "Manual"}], "AGOSTO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 974.45, "tipo": ""}, {"data": "2026-08-03", "historico": "Transfer Giba - dentista", "valor": 500.0, "saldo": 474.45, "tipo": "Manual"}, {"data": "2026-08-03", "historico": "Transfer Zikita", "valor": 300.0, "saldo": 174.45, "tipo": "Manual"}, {"data": "2026-08-05", "historico": "Salário", "valor": -6035.06, "saldo": 6209.51, "tipo": "Manual"}, {"data": "2026-08-05", "historico": "Banhos Bibi - Agosto", "valor": 165.0, "saldo": 6044.51, "tipo": "Manual"}, {"data": "2026-08-05", "historico": "Transfer Olga - Projeto marmitas", "valor": 350.0, "saldo": 5694.51, "tipo": "Manual"}, {"data": "2026-08-05", "historico": "Invest.", "valor": 950.0, "saldo": 4744.51, "tipo": "Manual"}, {"data": "2026-08-07", "historico": "Magalu - tapetes Bibi", "valor": 58.41, "saldo": 4686.1, "tipo": "Manual"}, {"data": "2026-08-07", "historico": "Rendimento", "valor": -0.08, "saldo": 4686.18, "tipo": "Manual"}, {"data": "2026-08-10", "historico": "Ali - bugigangas", "valor": 64.62, "saldo": 4621.56, "tipo": "Manual"}, {"data": "2026-08-10", "historico": "Cond.", "valor": 2552.37, "saldo": 2069.19, "tipo": "DDA"}, {"data": "2026-08-10", "historico": "Petz - ração", "valor": 99.6, "saldo": 1969.59, "tipo": "Manual"}, {"data": "2026-08-10", "historico": "Amazon - balança de cozinha", "valor": 19.9, "saldo": 1949.69, "tipo": "Manual"}, {"data": "2026-08-10", "historico": "Kotas - Youtube", "valor": 10.66, "saldo": 1939.03, "tipo": "Manual"}, {"data": "2026-08-10", "historico": "Kotas - Deezer", "valor": 10.33, "saldo": 1928.7, "tipo": "Manual"}, {"data": "2026-08-12", "historico": "Omoda 03/24", "valor": 2076.69, "saldo": -147.99, "tipo": "Manual"}, {"data": "2026-08-14", "historico": "Salário", "valor": -7437.81, "saldo": 7289.82, "tipo": "Manual"}, {"data": "2026-08-14", "historico": "Rendimento", "valor": -0.02, "saldo": 7289.84, "tipo": "Manual"}, {"data": "2026-08-14", "historico": "Magalu - chinelo", "valor": 74.89, "saldo": 7214.95, "tipo": "Manual"}, {"data": "2026-08-17", "historico": "AACD", "valor": 25.0, "saldo": 7189.95, "tipo": "Manual"}, {"data": "2026-08-17", "historico": "Invest.", "valor": 2000.0, "saldo": 5189.95, "tipo": "Manual"}, {"data": "2026-08-18", "historico": "Lava-rápido", "valor": 70.0, "saldo": 5119.95, "tipo": "Manual"}, {"data": "2026-08-18", "historico": "Conta energia - final do dia", "valor": 151.14, "saldo": 4968.81, "tipo": "Débito"}, {"data": "2026-08-20", "historico": "Bradesco", "valor": 9.99, "saldo": 4958.82, "tipo": "Débito"}, {"data": "2026-08-20", "historico": "Nubank", "valor": 2416.66, "saldo": 2542.16, "tipo": "Manual"}, {"data": "2026-08-21", "historico": "Conv. Tata", "valor": 554.3, "saldo": 1987.86, "tipo": "Manual"}, {"data": "2026-08-21", "historico": "Vivo fibra - final do dia", "valor": 323.21, "saldo": 1664.65, "tipo": "Débito"}, {"data": "2026-08-21", "historico": "Rendimento", "valor": -0.07, "saldo": 1664.72, "tipo": "Manual"}, {"data": "2026-08-24", "historico": "CCB", "valor": 750.0, "saldo": 914.72, "tipo": "Manual"}, {"data": "2026-08-24", "historico": "Ali - Carregador", "valor": 18.99, "saldo": 895.73, "tipo": "Manual"}, {"data": "2026-08-24", "historico": "Ali - Carregador", "valor": 40.56, "saldo": 855.17, "tipo": "Manual"}, {"data": "2026-08-28", "historico": "Rendimento", "valor": -0.02, "saldo": 855.19, "tipo": "Manual"}, {"data": "2026-08-28", "historico": "Barbeiro", "valor": 65.0, "saldo": 790.19, "tipo": "Manual"}], "SETEMBRO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 790.19, "tipo": ""}, {"data": "2026-09-02", "historico": "IOF", "valor": 0.58, "saldo": 789.61, "tipo": "Manual"}, {"data": "2026-09-03", "historico": "Academia", "valor": 150.0, "saldo": 639.61, "tipo": "Manual"}, {"data": "2026-09-03", "historico": "Banhos bibi", "valor": 165.0, "saldo": 474.61, "tipo": "Manual"}, {"data": "2026-09-04", "historico": "Salário", "valor": -6023.2, "saldo": 6497.81, "tipo": "Manual"}, {"data": "2026-09-04", "historico": "Rendimento", "valor": -0.05, "saldo": 6497.86, "tipo": "Manual"}, {"data": "2026-09-04", "historico": "Invest.", "valor": 950.0, "saldo": 5547.86, "tipo": "Manual"}, {"data": "2026-09-04", "historico": "Magalu - Tenis", "valor": 273.59, "saldo": 5274.27, "tipo": "Manual"}, {"data": "2026-09-10", "historico": "Cond.", "valor": 2237.12, "saldo": 3037.15, "tipo": "DDA"}, {"data": "2026-09-10", "historico": "Kotas - Youtube", "valor": 10.66, "saldo": 3026.49, "tipo": "Manual"}, {"data": "2026-09-10", "historico": "Kotas - Deezer", "valor": 10.33, "saldo": 3016.16, "tipo": "Manual"}, {"data": "2026-09-11", "historico": "Rendimento", "valor": -0.04, "saldo": 3016.2, "tipo": "Manual"}, {"data": "2026-09-14", "historico": "Transfer Olga - computer novo", "valor": 1000.0, "saldo": 2016.2, "tipo": "Manual"}, {"data": "2026-09-14", "historico": "Omoda 04/24", "valor": 2076.69, "saldo": -60.49, "tipo": "Manual"}, {"data": "2026-09-15", "historico": "Salário", "valor": -7437.81, "saldo": 7377.32, "tipo": "Manual"}, {"data": "2026-09-15", "historico": "AACD - cobreança duplicada", "valor": 50.0, "saldo": 7327.32, "tipo": "Manual"}, {"data": "2026-09-15", "historico": "AACD - estorno automático", "valor": -25.0, "saldo": 7352.32, "tipo": "Manual"}, {"data": "2026-09-15", "historico": "Transfer Olga - TV tia bete", "valor": 217.0, "saldo": 7135.32, "tipo": "Manual"}, {"data": "2026-09-15", "historico": "Nubank", "valor": 3155.58, "saldo": 3979.74, "tipo": "Manual"}, {"data": "2026-09-16", "historico": "Transfer Zikita - hotel", "valor": -500.0, "saldo": 4479.74, "tipo": "Manual"}, {"data": "2026-09-17", "historico": "Transfer Zoio - presente mãe", "valor": 205.0, "saldo": 4274.74, "tipo": "Manual"}, {"data": "2026-09-18", "historico": "Rendimento", "valor": -0.07, "saldo": 4274.81, "tipo": "Manual"}, {"data": "2026-09-18", "historico": "Enel - final do dia", "valor": 175.25, "saldo": 4099.56, "tipo": "Débito"}, {"data": "2026-09-21", "historico": "Bradesco", "valor": 9.99, "saldo": 4089.57, "tipo": "Débito"}, {"data": "2026-09-21", "historico": "Conv. Ir. Tata", "valor": 554.3, "saldo": 3535.27, "tipo": "Manual"}, {"data": "2026-09-21", "historico": "Gasolina", "valor": 100.0, "saldo": 3435.27, "tipo": "Manual"}, {"data": "2026-09-21", "historico": "Vivo fibra - final do dia", "valor": 323.2, "saldo": 3112.07, "tipo": "Débito"}, {"data": "2026-09-21", "historico": "CCB", "valor": 500.0, "saldo": 2612.07, "tipo": "Manual"}, {"data": "2026-09-23", "historico": "Barbeiro", "valor": 65.0, "saldo": 2547.07, "tipo": "Manual"}, {"data": "2026-09-23", "historico": "Amazon - Adesivo nariz", "valor": 21.85, "saldo": 2525.22, "tipo": "Manual"}, {"data": "2026-09-23", "historico": "Amazon - Guarda chuva", "valor": 42.21, "saldo": 2483.01, "tipo": "Manual"}, {"data": "2026-09-23", "historico": "Rendimento", "valor": -0.05, "saldo": 2483.06, "tipo": "Manual"}, {"data": "2026-09-27", "historico": "CCB - nível Brasil", "valor": 250.0, "saldo": 2233.06, "tipo": "Manual"}, {"data": "2026-09-28", "historico": "Centauro - Blusa Nike", "valor": 236.84, "saldo": 1996.22, "tipo": "Manual"}], "OUTUBRO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 1996.22, "tipo": ""}, {"data": "2026-10-02", "historico": "Banhos bibi", "valor": 165.0, "saldo": 1831.22, "tipo": "Manual"}, {"data": "2026-10-02", "historico": "Rendimento", "valor": -0.06, "saldo": 1831.28, "tipo": "Manual"}, {"data": "2026-10-02", "historico": "Gasolina", "valor": 94.99, "saldo": 1736.29, "tipo": "Manual"}, {"data": "2026-10-02", "historico": "Encargos", "valor": 0.23, "saldo": 1736.06, "tipo": "Manual"}, {"data": "2026-10-05", "historico": "Petz - ração ", "valor": 110.7, "saldo": 1625.36, "tipo": "Manual"}, {"data": "2026-10-05", "historico": "Salário", "valor": -6023.2, "saldo": 7648.56, "tipo": "Manual"}, {"data": "2026-10-05", "historico": "Invest.", "valor": 950.0, "saldo": 6698.56, "tipo": "Manual"}, {"data": "2026-10-05", "historico": "Compra dolar - Nu", "valor": 1000.0, "saldo": 5698.56, "tipo": "Manual"}, {"data": "2026-10-05", "historico": "Academia", "valor": 675.0, "saldo": 5023.56, "tipo": "Manual"}, {"data": "2026-10-06", "historico": "Churras - familia", "valor": 144.4, "saldo": 4879.16, "tipo": "Manual"}, {"data": "2026-10-06", "historico": "Mercado livre - Gel rosto Principia", "valor": 59.53, "saldo": 4819.63, "tipo": "Manual"}, {"data": "2026-10-08", "historico": "Almoço", "valor": 58.8, "saldo": 4760.83, "tipo": "Manual"}, {"data": "2026-10-09", "historico": "Kotas - Youtube", "valor": 10.66, "saldo": 4750.17, "tipo": "Manual"}, {"data": "2026-10-09", "historico": "Kotas - Deezer", "valor": 10.33, "saldo": 4739.84, "tipo": "Manual"}, {"data": "2026-10-09", "historico": "Rendimento", "valor": -0.16, "saldo": 4740.0, "tipo": "Manual"}, {"data": "2026-10-13", "historico": "Omoda 04/24", "valor": 2076.69, "saldo": 2663.31, "tipo": "Manual"}, {"data": "2026-10-13", "historico": "Cond.", "valor": 2505.65, "saldo": 157.66, "tipo": "DDA"}, {"data": "2026-10-13", "historico": "Amazon - tapetinho", "valor": 61.27, "saldo": 96.39, "tipo": "Manual"}, {"data": "2026-10-14", "historico": "Porto Seguros - vidro sacada", "valor": -2400.0, "saldo": 2496.39, "tipo": "Manual"}, {"data": "2026-10-14", "historico": "Claudio - vidro sacada - 50%", "valor": 615.0, "saldo": 1881.39, "tipo": "Manual"}, {"data": "2026-10-15", "historico": "AACD", "valor": 25.0, "saldo": 1856.39, "tipo": "Manual"}, {"data": "2026-10-15", "historico": "Salário", "valor": -7437.81, "saldo": 9294.2, "tipo": "Manual"}, {"data": "2026-10-15", "historico": "Projeto marmitas", "valor": 350.0, "saldo": 8944.2, "tipo": "Manual"}, {"data": "2026-10-15", "historico": "Nubank", "valor": 3277.6, "saldo": 5666.6, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "Transfer Dantas - café Bras", "valor": 14.0, "saldo": 5652.6, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "TransferRecife - Maragogi - sinal", "valor": 60.0, "saldo": 5592.6, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "Cabelo", "valor": 65.0, "saldo": 5527.6, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "Gasolina", "valor": 97.14, "saldo": 5430.46, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "Sodie - bolo", "valor": 115.43, "saldo": 5315.03, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "Estacionamento - paino piano", "valor": 30.0, "saldo": 5285.03, "tipo": "Manual"}, {"data": "2026-10-19", "historico": "Rendimento", "valor": -0.02, "saldo": 5285.05, "tipo": "Manual"}, {"data": "2026-10-20", "historico": "Bradesco", "valor": 9.99, "saldo": 5275.06, "tipo": "Débito"}, {"data": "2026-10-20", "historico": "Amazon - apoio de pé", "valor": 47.3, "saldo": 5227.76, "tipo": "Manual"}, {"data": "2026-10-20", "historico": "Enel - final do dia", "valor": 146.36, "saldo": 5081.4, "tipo": "Débito"}, {"data": "2026-10-21", "historico": "Conv. Tata", "valor": 554.3, "saldo": 4527.1, "tipo": "Manual"}, {"data": "2026-10-21", "historico": "Vivo fibra - final do dia", "valor": 323.21, "saldo": 4203.89, "tipo": "Débito"}, {"data": "", "historico": "CCB", "valor": 750.0, "saldo": 3453.89, "tipo": "Manual"}], "NOVEMBRO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 3453.89, "tipo": ""}], "DEZEMBRO": [{"data": "Saldo Inicial", "historico": "Saldo Inicial", "valor": 0.0, "saldo": 3453.89, "tipo": ""}]}};
+
+        let db = JSON.parse(localStorage.getItem('finDB_v10')) || defaultData;
+
+        function init() {
+            if (!db[currentYear]) {
+                db[currentYear] = {};
+                months.forEach(m => db[currentYear][m] = []);
+            }
+            renderYearSelect();
+            renderTabs();
+            renderData();
+        }
+
+        function parseToISO(inputDate) {
+            if (!inputDate || inputDate === "Saldo Inicial" || inputDate === "1900-01-01") return "Saldo Inicial";
+            let val = String(inputDate).trim();
+            if (/^\d{1,2}$/.test(val)) {
+                let day = parseInt(val, 10);
+                if (day >= 1 && day <= 31) {
+                    let mIdx = (currentMonthIdx + 1).toString().padStart(2, '0');
+                    let dStr = day.toString().padStart(2, '0');
+                    return `${currentYear}-${mIdx}-${dStr}`;
+                }
+            }
+            if (val.includes('/')) {
+                let parts = val.split('/');
+                if (parts.length === 3) {
+                    let d = parts[0].padStart(2, '0');
+                    let m = parts[1].padStart(2, '0');
+                    let y = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+                    return `${y}-${m}-${d}`;
+                }
+            }
+            return val;
+        }
+
+        function formatDateBR(isoDate) {
+            if (!isoDate || isoDate === "Saldo Inicial" || isoDate === "1900-01-01") return "Saldo Inicial";
+            if (isoDate.includes('-')) {
+                let parts = isoDate.split('-');
+                if (parts.length === 3) {
+                    return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+                }
+            }
+            return isoDate;
+        }
+
+        function recalculateSaldos(monthName) {
+            const list = db[currentYear][monthName] || [];
+            list.sort((a, b) => {
+                if (a.historico === "Saldo Inicial" || a.data === "Saldo Inicial") return -1;
+                if (b.historico === "Saldo Inicial" || b.data === "Saldo Inicial") return 1;
+                if (!a.data) return -1;
+                if (!b.data) return 1;
+                return a.data.localeCompare(b.data);
+            });
+
+            let currentSaldo = 0;
+            list.forEach((item, idx) => {
+                const val = parseFloat(item.valor) || 0;
+                if (idx === 0 && (item.historico === "Saldo Inicial" || item.data === "Saldo Inicial")) {
+                    currentSaldo = item.saldo;
+                } else {
+                    currentSaldo = currentSaldo - val;
+                    item.saldo = currentSaldo;
+                }
+            });
+        }
+
+        function renderYearSelect() {
+            const select = document.getElementById('yearSelect');
+            select.innerHTML = '';
+            const years = Object.keys(db).sort();
+            years.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                if (y == currentYear) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('monthTabs');
+            container.innerHTML = '';
+            months.forEach((m, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `tab-btn ${idx === currentMonthIdx ? 'active' : ''}`;
+                btn.textContent = m;
+                btn.onclick = () => {
+                    currentMonthIdx = idx;
+                    renderTabs();
+                    renderData();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderData() {
+            const tbody = document.getElementById('dataTable');
+            tbody.innerHTML = '';
+            const monthName = months[currentMonthIdx];
+            
+            recalculateSaldos(monthName);
+            
+            const records = db[currentYear]?.[monthName] || [];
+
+            let totalEntradas = 0;
+            let totalSaidas = 0;
+            let ultimoSaldo = records.length ? records[records.length - 1].saldo : 0;
+
+            records.forEach((rec, i) => {
+                const val = parseFloat(rec.valor) || 0;
+                if (val < 0) totalEntradas += Math.abs(val);
+                else totalSaidas += val;
+
+                const displayDate = formatDateBR(rec.data);
+                const isSaldoInicial = rec.historico === "Saldo Inicial" || rec.data === "Saldo Inicial";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${displayDate}</td>
+                    <td>${rec.historico || '-'}</td>
+                    <td class="${val < 0 ? 'val-entrada' : (val > 0 ? 'val-saida' : '')}">${val < 0 ? '+ R$ ' + Math.abs(val).toFixed(2) : (val > 0 ? '- R$ ' + val.toFixed(2) : 'R$ 0,00')}</td>
+                    <td>R$ ${(parseFloat(rec.saldo)||0).toFixed(2)}</td>
+                    <td>${rec.tipo || ''}</td>
+                    <td class="actions-cell">
+                        ${isSaldoInicial ? '<span style="color: var(--text-secondary); font-size: 0.8rem;">Fixo</span>' : `
+                            <button class="btn-sm btn-edit" onclick="editRecord(${i})">Editar</button>
+                            <button class="btn-sm" onclick="deleteRecord(${i})">Remover</button>
+                        `}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('cardSaldo').textContent = `R$ ${ultimoSaldo.toFixed(2)}`;
+            document.getElementById('cardEntradas').textContent = `R$ ${totalEntradas.toFixed(2)}`;
+            document.getElementById('cardSaidas').textContent = `R$ ${totalSaidas.toFixed(2)}`;
+            document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
+        }
+
+        function openAddModal() {
+            const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
+            const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
+
+            const dtPrompt = prompt(`Data do registro (ex: 25 para dia 25/${currentMonthNum}/${currentYear} ou DD/MM/AAAA):`, defaultPromptDate);
+            if (dtPrompt === null) return;
+
+            const dtParsed = parseToISO(dtPrompt);
+
+            const hist = prompt("Descrição / Histórico:");
+            if (!hist) return;
+
+            const valStr = prompt("Valor em R$ (Exemplo: 50 para gasto, -50 para salário/rendimento):");
+            if (valStr === null) return;
+
+            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n\n(Digite o número ou o nome da opção):", "1");
+            if (tipoInput === null) return;
+
+            let tipo = "";
+            let tClean = tipoInput.trim().toLowerCase();
+            if (tClean === "1" || tClean === "manual") tipo = "Manual";
+            else if (tClean === "2" || tClean === "débito" || tClean === "debito") tipo = "Débito";
+            else if (tClean === "3" || tClean === "dda") tipo = "DDA";
+            else tipo = "Manual";
+
+            const val = parseFloat(valStr.replace(',', '.')) || 0;
+            const monthName = months[currentMonthIdx];
+            const list = db[currentYear][monthName] || [];
+
+            list.push({
+                data: dtParsed,
+                historico: hist,
+                valor: val,
+                saldo: 0,
+                tipo: tipo
+            });
+
+            saveData();
+            renderData();
+        }
+
+        function editRecord(idx) {
+            const monthName = months[currentMonthIdx];
+            const item = db[currentYear][monthName][idx];
+
+            const currentDisplayDate = formatDateBR(item.data);
+            const newDtPrompt = prompt("Editar Data (digite apenas o dia, ou DD/MM/AAAA):", currentDisplayDate);
+            if (newDtPrompt === null) return;
+
+            const newDtParsed = parseToISO(newDtPrompt);
+
+            const newHist = prompt("Editar Descrição / Histórico:", item.historico);
+            if (newHist === null) return;
+
+            const newValStr = prompt("Editar Valor em R$ (Negativo para entrada, Positivo para gasto):", item.valor);
+            if (newValStr === null) return;
+
+            let defaultVal = "1";
+            if (item.tipo === "Débito") defaultVal = "2";
+            else if (item.tipo === "DDA") defaultVal = "3";
+
+            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n\n(Digite o número ou o nome da opção):", defaultVal);
+            if (tipoInput === null) return;
+
+            let newTipo = "";
+            let tClean = tipoInput.trim().toLowerCase();
+            if (tClean === "1" || tClean === "manual") newTipo = "Manual";
+            else if (tClean === "2" || tClean === "débito" || tClean === "debito") newTipo = "Débito";
+            else if (tClean === "3" || tClean === "dda") newTipo = "DDA";
+            else newTipo = "Manual";
+
+            item.data = newDtParsed;
+            item.historico = newHist;
+            item.valor = parseFloat(String(newValStr).replace(',', '.')) || 0;
+            item.tipo = newTipo;
+
+            saveData();
+            renderData();
+        }
+
+        function deleteRecord(idx) {
+            if (confirm("Deseja remover este registro?")) {
+                const monthName = months[currentMonthIdx];
+                db[currentYear][monthName].splice(idx, 1);
+                saveData();
+                renderData();
+            }
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('finDB_v10', JSON.stringify(db));
+            } catch(e) { console.log('Storage local indisponível.'); }
+        }
+
+        function changeYear() {
+            currentYear = document.getElementById('yearSelect').value;
+            renderData();
+        }
+
+        function addYear() {
+            const y = prompt("Digite o ano desejado (ex: 2025 ou 2027):");
+            if (y && !db[y]) {
+                db[y] = {};
+                months.forEach(m => db[y][m] = []);
+                currentYear = y;
+                saveData();
+                renderYearSelect();
+                renderData();
+            }
+        }
+
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `financeiro_backup.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    db = parsed;
+                    saveData();
+                    init();
+                    alert("Backup importado com sucesso!");
+                } catch(err) {
+                    alert("Formato de arquivo JSON inválido.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+        }
+    </script>
+</body>
+</html>
