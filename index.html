@@ -138,9 +138,8 @@
                 <span class="sync-badge" id="syncBadge">🔌 OneDrive Desconectado</span>
                 <button id="msLoginBtn" onclick="loginMicrosoft()" style="background: #0078d4; color: white; border: none; font-weight: 600;">🔑 Entrar na Conta Microsoft</button>
                 
-                <!-- Seletor manual de planilhas do OneDrive -->
+                <!-- Caixa de Seleção Obrigatória das Planilhas -->
                 <select id="fileSelect" onchange="selectOneDriveFile()" style="display:none; font-weight: 600; border-color: var(--accent);"></select>
-                <button id="browseBtn" onclick="listOneDriveFiles()" style="display:none; background: var(--border-color);">📁 Buscar Pasta 'Pendrive'</button>
 
                 <select id="yearSelect" onchange="changeYear()"></select>
                 <button onclick="addYear()">+ Novo Ano</button>
@@ -206,7 +205,6 @@
         let msalInstance = null;
         let accessToken = null;
         let driveItemId = null;
-        let availableFiles = [];
 
         try {
             if (window.msal) {
@@ -238,7 +236,6 @@
                 accessToken = loginResponse.accessToken;
                 document.getElementById('syncBadge').textContent = "☁️ OneDrive Conectado";
                 document.getElementById('msLoginBtn').style.display = "none";
-                document.getElementById('browseBtn').style.display = "inline-block";
                 
                 await listOneDriveFiles();
             } catch(e) {
@@ -246,47 +243,30 @@
             }
         }
 
-        // Busca planilhas .xlsx na pasta "Pendrive" ou na raiz do OneDrive
+        // Busca todas as planilhas do OneDrive para o usuário escolher
         async function listOneDriveFiles() {
             if (!accessToken) return;
             try {
-                // Tenta procurar na pasta 'Pendrive' primeiro
-                let url = `https://graph.microsoft.com/v1.0/me/drive/root:/Pendrive:/children`;
+                let url = `https://graph.microsoft.com/v1.0/me/drive/root/search(q='Gastos')`;
                 let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
                 let data = await res.json();
 
-                // Se não achar a pasta Pendrive, busca planilhas em todo o OneDrive
-                if (!data.value || data.value.length === 0) {
-                    url = `https://graph.microsoft.com/v1.0/me/drive/root/search(q='.xlsx')`;
-                    res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-                    data = await res.json();
-                }
-
                 if (data.value && data.value.length > 0) {
-                    availableFiles = data.value.filter(f => f.name.endsWith('.xlsx'));
+                    const files = data.value.filter(f => f.name.endsWith('.xlsx'));
                     
                     const select = document.getElementById('fileSelect');
-                    select.innerHTML = '<option value="">-- Selecione a Planilha --</option>';
-                    availableFiles.forEach((file, idx) => {
+                    select.innerHTML = '<option value="">-- Selecione a Planilha no OneDrive --</option>';
+                    files.forEach((file) => {
                         const opt = document.createElement('option');
                         opt.value = file.id;
                         opt.textContent = file.name;
-                        
-                        // Seleciona automaticamente se for "Gastos 2026 Bancos.xlsx"
-                        if (file.name.toLowerCase().includes("2026")) {
-                            opt.selected = true;
-                            driveItemId = file.id;
-                        }
                         select.appendChild(opt);
                     });
                     
                     select.style.display = "inline-block";
-
-                    if (driveItemId) {
-                        await loadFromOneDrive();
-                    }
+                    alert("OneDrive Conectado! Escolha a sua planilha no menu suspenso no topo.");
                 } else {
-                    alert("Nenhum arquivo .xlsx foi encontrado na sua pasta 'Pendrive' ou OneDrive.");
+                    alert("Nenhum arquivo .xlsx com o nome 'Gastos' foi encontrado no seu OneDrive.");
                 }
             } catch(e) {
                 console.warn("Erro ao listar arquivos do OneDrive:", e);
@@ -301,14 +281,18 @@
             }
         }
 
-        function excelSerialToISO(serial) {
-            const num = Number(serial);
+        function convertExcelDateToISO(rawVal) {
+            if (!rawVal || rawVal === "Saldo Inicial" || rawVal === "1900-01-01" || rawVal === 1) return "Saldo Inicial";
+
+            const num = Number(rawVal);
             if (!isNaN(num) && num > 30000) {
                 const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
                 return dateObj.toISOString().split('T')[0];
             }
-            let str = String(serial || '').trim();
+
+            let str = String(rawVal).trim();
             if (str.includes('T')) str = str.split('T')[0];
+
             return parseToISO(str);
         }
 
@@ -349,7 +333,7 @@
                             return;
                         }
 
-                        const isoDate = excelSerialToISO(rawDate);
+                        const isoDate = convertExcelDateToISO(rawDate);
 
                         if (rawHist || rawVal !== 0) {
                             db[currentYear][monthName].push({
@@ -491,7 +475,7 @@
             const records = db[currentYear]?.[monthName] || [];
 
             if (records.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Clique no botão azul <b>🔑 Entrar na Conta Microsoft</b> no topo para carregar a sua planilha do OneDrive.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Clique no botão azul <b>🔑 Entrar na Conta Microsoft</b> no topo e selecione a sua planilha.</td></tr>`;
                 document.getElementById('cardSaldo').textContent = "R$ 0,00";
                 document.getElementById('cardEntradas').textContent = "R$ 0,00";
                 document.getElementById('cardSaidas').textContent = "R$ 0,00";
