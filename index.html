@@ -243,13 +243,11 @@
             }
         }
 
-        // Busca aumentada (até 200 itens) com filtro estrito de "Gastos"
         async function listOneDriveFilesFiltered() {
             if (!accessToken) return;
             try {
                 let allFiles = [];
 
-                // 1. Tenta buscar da pasta Pendrive
                 try {
                     let urlPendrive = `https://graph.microsoft.com/v1.0/me/drive/root:/Pendrive:/children?$top=100`;
                     let resP = await fetch(urlPendrive, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -257,25 +255,21 @@
                     if (dataP.value) allFiles = allFiles.concat(dataP.value);
                 } catch(errP) {}
 
-                // 2. Busca ampla no OneDrive com limite de 200 itens
                 let urlSearch = `https://graph.microsoft.com/v1.0/me/drive/root/search(q='Gastos')?$top=200`;
                 let resS = await fetch(urlSearch, { headers: { Authorization: `Bearer ${accessToken}` } });
                 let dataS = await resS.json();
                 if (dataS.value) allFiles = allFiles.concat(dataS.value);
 
-                // Remover duplicados pelo ID
                 const uniqueMap = new Map();
                 allFiles.forEach(f => uniqueMap.set(f.id, f));
                 const uniqueFiles = Array.from(uniqueMap.values());
 
-                // Filtro ESTRITO: Apenas arquivos .xlsx que contenham 'Gastos' no nome
                 const filteredGastos = uniqueFiles.filter(f => 
                     f.name && 
                     f.name.toLowerCase().endsWith('.xlsx') && 
                     f.name.toLowerCase().includes('gastos')
                 );
 
-                // Ordenar nomes por ordem decrescente (ex: 2026 antes de 2025)
                 filteredGastos.sort((a,b) => b.name.localeCompare(a.name));
 
                 const select = document.getElementById('fileSelect');
@@ -291,7 +285,7 @@
                     
                     select.style.display = "inline-block";
                 } else {
-                    alert("Nenhum arquivo de 'Gastos (.xlsx)' foi localizado. Verifique se o nome da planilha contém a palavra 'Gastos'.");
+                    alert("Nenhum arquivo de 'Gastos (.xlsx)' foi localizado.");
                 }
             } catch(e) {
                 console.warn("Erro ao listar planilhas:", e);
@@ -543,6 +537,7 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
+        // Função de adição com envio direto ao Excel no OneDrive
         async function openAddModal() {
             const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
             const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
@@ -569,25 +564,37 @@
             const val = parseFloat(valStr.replace(',', '.')) || 0;
             const monthName = months[currentMonthIdx];
 
-            if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
-            db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
-            
+            // 1. Gravar diretamente na planilha do Excel via Microsoft Graph API
             if (accessToken && driveItemId) {
                 try {
-                    await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/tables/Table1/rows/add`, {
-                        method: 'POST',
+                    // Busca a dimensão atual para colocar na próxima linha vazia
+                    const rangeRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/usedRange`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    const rangeData = await rangeRes.json();
+                    const nextRowIdx = rangeData.rowCount ? (rangeData.rowCount + 1) : 2;
+
+                    // Atualiza exatamente na primeira linha vazia do Excel
+                    await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${nextRowIdx}:E${nextRowIdx}')`, {
+                        method: 'PATCH',
                         headers: {
                             'Authorization': `Bearer ${accessToken}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            values: [[dtParsed, hist, val, 0, tipo]]
+                            values: [[dtParsed, hist, val, `=IF(C${nextRowIdx}<>0,D${nextRowIdx-1}-C${nextRowIdx},D${nextRowIdx-1})`, tipo]]
                         })
                     });
-                } catch(e) { console.warn("Erro ao gravar na planilha do OneDrive:", e); }
+                    alert("Lançamento gravado diretamente na planilha do OneDrive com sucesso!");
+                    await loadFromOneDrive();
+                } catch(e) {
+                    alert("Aviso: Lançamento exibido na tela, mas falhou ao gravar no Excel: " + e.message);
+                }
+            } else {
+                if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
+                db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
+                renderData();
             }
-
-            renderData();
         }
 
         function editRecord(idx) {
