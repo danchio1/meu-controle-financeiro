@@ -242,26 +242,36 @@
 
         async function findExcelFile() {
             if (!accessToken) return;
-            const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='${FILE_NAME}')`, {
+            const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='Gastos 2026 Bancos.xlsx')`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
             const data = await res.json();
+            
+            // Procura arquivo exatamente igual a Gastos 2026 Bancos.xlsx
             if (data.value && data.value.length > 0) {
-                driveItemId = data.value[0].id;
+                const exactMatch = data.value.find(item => item.name.toLowerCase() === "gastos 2026 bancos.xlsx");
+                driveItemId = exactMatch ? exactMatch.id : data.value[0].id;
             } else {
                 alert(`Ficheiro '${FILE_NAME}' não foi encontrado no seu OneDrive.`);
             }
         }
 
-        // Converte o número serial do Excel (ex: 45933) para AAAA-MM-DD
-        function excelSerialToISO(serial) {
-            if (typeof serial === 'number' && serial > 30000) {
-                const utcDays = Math.floor(serial - 25569);
-                const utcValue = utcDays * 86400;
-                const dateObj = new Date(utcValue * 1000);
+        // Converte qualquer formato de data recebido do Excel para AAAA-MM-DD
+        function convertExcelDateToISO(rawVal) {
+            if (!rawVal || rawVal === "Saldo Inicial" || rawVal === "1900-01-01" || rawVal === 1) return "Saldo Inicial";
+
+            // Se for número serial do Excel (ex: 46297)
+            const num = Number(rawVal);
+            if (!isNaN(num) && num > 30000) {
+                const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
                 return dateObj.toISOString().split('T')[0];
             }
-            return String(serial || '');
+
+            // Se for texto do tipo 2026-10-02T00:00:00Z
+            let str = String(rawVal).trim();
+            if (str.includes('T')) str = str.split('T')[0];
+
+            return parseToISO(str);
         }
 
         async function loadFromOneDrive() {
@@ -285,10 +295,10 @@
                         const rawSaldo = parseFloat(r[3]) || 0;
                         const rawTipo = r[4] ? String(r[4]).trim() : "Manual";
 
-                        // Ignorar linhas completamente vazias
+                        // Ignorar linhas vazias sem histórico nem valores
                         if (!rawDate && !rawHist && rawVal === 0 && rawSaldo === 0) return;
 
-                        // Tratar Saldo Inicial (evitar duplicados de linhas vazias)
+                        // Tratar Saldo Inicial (garantir apenas um)
                         if (rawHist === "Saldo Inicial" || rawDate === "1900-01-01" || rawDate === "Saldo Inicial" || rawDate === 1) {
                             if (!hasSaldoInicial) {
                                 db[currentYear][monthName].push({
@@ -303,11 +313,11 @@
                             return;
                         }
 
-                        const isoDate = excelSerialToISO(rawDate);
+                        const isoDate = convertExcelDateToISO(rawDate);
 
                         if (rawHist || rawVal !== 0) {
                             db[currentYear][monthName].push({
-                                data: parseToISO(isoDate),
+                                data: isoDate,
                                 historico: rawHist,
                                 valor: rawVal,
                                 saldo: rawSaldo,
