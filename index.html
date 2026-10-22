@@ -540,7 +540,6 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
-        // Função de gravação no Excel corrigida para tratar formulas + values
         async function openAddModal() {
             const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
             const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
@@ -589,7 +588,6 @@
                     const targetRowIdx = lastFilledRow + 1;
                     const formulaSaldo = `=IF(C${targetRowIdx}<>0,D${targetRowIdx-1}-C${targetRowIdx},D${targetRowIdx-1})`;
 
-                    // Envia com a propriedade formulas para o Excel entender a fórmula do Saldo
                     const updateRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${targetRowIdx}:E${targetRowIdx}')`, {
                         method: 'PATCH',
                         headers: {
@@ -680,6 +678,7 @@
             }
         }
 
+        // Função de Remoção Preservando a Fórmula da Coluna D (Saldo)
         async function deleteRecord(idx) {
             if (confirm("Deseja remover este registro da sua planilha do Excel no OneDrive?")) {
                 const monthName = months[currentMonthIdx];
@@ -688,7 +687,9 @@
                 if (accessToken && driveItemId && item.excelRowIndex) {
                     try {
                         const rowIdx = item.excelRowIndex;
-                        const clearRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:E${rowIdx}')/clear`, {
+                        
+                        // 1. Limpa o conteúdo das colunas A, B e C (Data, Histórico e Valor)
+                        const clearABC = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:C${rowIdx}')/clear`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${accessToken}`,
@@ -697,12 +698,21 @@
                             body: JSON.stringify({ applyTo: 'contents' })
                         });
 
-                        if (clearRes.ok) {
-                            alert(`Lançamento da linha ${rowIdx} removido do Excel no OneDrive com sucesso!`);
+                        // 2. Limpa o conteúdo da coluna E (Tipo de Pagamento)
+                        const clearE = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='E${rowIdx}')/clear`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ applyTo: 'contents' })
+                        });
+
+                        if (clearABC.ok && clearE.ok) {
+                            alert(`Lançamento da linha ${rowIdx} removido do Excel mantendo a fórmula da coluna D de Saldo!`);
                             await loadFromOneDrive();
                         } else {
-                            const errText = await clearRes.text();
-                            alert("Erro ao remover no Excel: " + errText);
+                            alert("Erro ao remover dados das células no Excel.");
                         }
                     } catch(e) { alert("Erro ao remover no Excel: " + e.message); }
                 } else {
