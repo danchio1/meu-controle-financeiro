@@ -192,6 +192,7 @@
     <script>
         const APP_PASSWORD = "17Junho00!";
         const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833";
+        const FILE_NAME = "Gastos 2026 Bancos.xlsx";
 
         const msalConfig = {
             auth: {
@@ -329,7 +330,7 @@
                     db[currentYear][monthName] = [];
                     let hasSaldoInicial = false;
 
-                    rows.forEach(r => {
+                    rows.forEach((r, idx) => {
                         const rawDate = r[0];
                         const rawHist = r[1] ? String(r[1]).trim() : "";
                         const rawVal = parseFloat(r[2]) || 0;
@@ -341,6 +342,7 @@
                         if (rawHist === "Saldo Inicial" || rawDate === "1900-01-01" || rawDate === "Saldo Inicial" || rawDate === 1) {
                             if (!hasSaldoInicial) {
                                 db[currentYear][monthName].push({
+                                    excelRowIndex: idx + 2,
                                     data: "Saldo Inicial",
                                     historico: "Saldo Inicial",
                                     valor: 0,
@@ -356,6 +358,7 @@
 
                         if (rawHist || rawVal !== 0) {
                             db[currentYear][monthName].push({
+                                excelRowIndex: idx + 2, // Guarda o índice real da linha no Excel (linha 2, 3, 4...)
                                 data: isoDate,
                                 historico: rawHist,
                                 valor: rawVal,
@@ -537,7 +540,6 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
-        // Função de gravação precisa buscando a última linha REAL com dados na coluna B
         async function openAddModal() {
             const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
             const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
@@ -565,9 +567,7 @@
             const monthName = months[currentMonthIdx];
 
             if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
-            db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
             
-            // Gravação inteligente no OneDrive buscando a última linha real com histórico na Coluna B
             if (accessToken && driveItemId) {
                 try {
                     const rangeRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='B1:B100')`, {
@@ -587,7 +587,6 @@
                     
                     const targetRowIdx = lastFilledRow + 1;
 
-                    // Escreve na primeira linha vazia verdadeira da planilha
                     await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${targetRowIdx}:E${targetRowIdx}')`, {
                         method: 'PATCH',
                         headers: {
@@ -598,17 +597,19 @@
                             values: [[dtParsed, hist, val, `=IF(C${targetRowIdx}<>0,D${targetRowIdx-1}-C${targetRowIdx},D${targetRowIdx-1})`, tipo]]
                         })
                     });
-                    alert(`Lançamento gravado diretamente na linha ${targetRowIdx} da planilha do OneDrive com sucesso!`);
+                    alert(`Lançamento gravado diretamente no Excel (linha ${targetRowIdx})!`);
                     await loadFromOneDrive();
                 } catch(e) {
-                    alert("Aviso: Lançamento exibido na tela, mas falhou ao gravar no Excel: " + e.message);
+                    alert("Aviso: Falhou ao gravar no Excel: " + e.message);
                 }
             } else {
+                db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
                 renderData();
             }
         }
 
-        function editRecord(idx) {
+        // Função de Edição Direta no Excel no OneDrive
+        async function editRecord(idx) {
             const monthName = months[currentMonthIdx];
             const item = db[currentYear][monthName][idx];
 
@@ -638,18 +639,56 @@
 
             const valParsed = parseFloat(String(newValStr).replace(',', '.')) || 0;
 
-            item.data = newDtParsed;
-            item.historico = newHist;
-            item.valor = valParsed;
-            item.tipo = newTipo;
-            renderData();
+            if (accessToken && driveItemId && item.excelRowIndex) {
+                try {
+                    const rowIdx = item.excelRowIndex;
+                    await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:E${rowIdx}')`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            values: [[newDtParsed, newHist, valParsed, `=IF(C${rowIdx}<>0,D${rowIdx-1}-C${rowIdx},D${rowIdx-1})`, newTipo]]
+                        })
+                    });
+                    alert(`Lançamento da linha ${rowIdx} atualizado na planilha no OneDrive com sucesso!`);
+                    await loadFromOneDrive();
+                } catch(e) { alert("Erro ao editar no Excel: " + e.message); }
+            } else {
+                item.data = newDtParsed;
+                item.historico = newHist;
+                item.valor = valParsed;
+                item.tipo = newTipo;
+                renderData();
+            }
         }
 
-        function deleteRecord(idx) {
-            if (confirm("Deseja remover este registro?")) {
+        // Função de Remoção Direta no Excel no OneDrive
+        async function deleteRecord(idx) {
+            if (confirm("Deseja remover este registro da sua planilha do Excel?")) {
                 const monthName = months[currentMonthIdx];
-                db[currentYear][monthName].splice(idx, 1);
-                renderData();
+                const item = db[currentYear][monthName][idx];
+
+                if (accessToken && driveItemId && item.excelRowIndex) {
+                    try {
+                        const rowIdx = item.excelRowIndex;
+                        // Limpa os valores do intervalo A:E daquela linha no Excel
+                        await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:E${rowIdx}')/clear`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ applyTo: 'contents' })
+                        });
+                        alert(`Registro removido da planilha do OneDrive com sucesso!`);
+                        await loadFromOneDrive();
+                    } catch(e) { alert("Erro ao remover no Excel: " + e.message); }
+                } else {
+                    db[currentYear][monthName].splice(idx, 1);
+                    renderData();
+                }
             }
         }
 
