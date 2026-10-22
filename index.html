@@ -192,7 +192,6 @@
     <script>
         const APP_PASSWORD = "17Junho00!";
         const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833";
-        const FILE_NAME = "Gastos 2026 Bancos.xlsx";
 
         const msalConfig = {
             auth: {
@@ -358,7 +357,7 @@
 
                         if (rawHist || rawVal !== 0) {
                             db[currentYear][monthName].push({
-                                excelRowIndex: idx + 2, // Guarda o índice real da linha no Excel (linha 2, 3, 4...)
+                                excelRowIndex: idx + 2, // Guarda o número exato da linha no Excel
                                 data: isoDate,
                                 historico: rawHist,
                                 valor: rawVal,
@@ -597,7 +596,7 @@
                             values: [[dtParsed, hist, val, `=IF(C${targetRowIdx}<>0,D${targetRowIdx-1}-C${targetRowIdx},D${targetRowIdx-1})`, tipo]]
                         })
                     });
-                    alert(`Lançamento gravado diretamente no Excel (linha ${targetRowIdx})!`);
+                    alert(`Lançamento gravado diretamente no Excel (linha ${targetRowIdx}) com sucesso!`);
                     await loadFromOneDrive();
                 } catch(e) {
                     alert("Aviso: Falhou ao gravar no Excel: " + e.message);
@@ -608,7 +607,7 @@
             }
         }
 
-        // Função de Edição Direta no Excel no OneDrive
+        // Função de Edição Direta e Confirmada no Excel no OneDrive
         async function editRecord(idx) {
             const monthName = months[currentMonthIdx];
             const item = db[currentYear][monthName][idx];
@@ -652,7 +651,7 @@
                             values: [[newDtParsed, newHist, valParsed, `=IF(C${rowIdx}<>0,D${rowIdx-1}-C${rowIdx},D${rowIdx-1})`, newTipo]]
                         })
                     });
-                    alert(`Lançamento da linha ${rowIdx} atualizado na planilha no OneDrive com sucesso!`);
+                    alert(`Lançamento atualizado na linha ${rowIdx} do Excel no OneDrive com sucesso!`);
                     await loadFromOneDrive();
                 } catch(e) { alert("Erro ao editar no Excel: " + e.message); }
             } else {
@@ -664,16 +663,15 @@
             }
         }
 
-        // Função de Remoção Direta no Excel no OneDrive
+        // Função de Remoção Direta e Confirmada no Excel no OneDrive
         async function deleteRecord(idx) {
-            if (confirm("Deseja remover este registro da sua planilha do Excel?")) {
+            if (confirm("Deseja remover este registro da sua planilha do Excel no OneDrive?")) {
                 const monthName = months[currentMonthIdx];
                 const item = db[currentYear][monthName][idx];
 
                 if (accessToken && driveItemId && item.excelRowIndex) {
                     try {
                         const rowIdx = item.excelRowIndex;
-                        // Limpa os valores do intervalo A:E daquela linha no Excel
                         await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:E${rowIdx}')/clear`, {
                             method: 'POST',
                             headers: {
@@ -682,7 +680,7 @@
                             },
                             body: JSON.stringify({ applyTo: 'contents' })
                         });
-                        alert(`Registro removido da planilha do OneDrive com sucesso!`);
+                        alert(`Lançamento da linha ${rowIdx} removido do Excel no OneDrive com sucesso!`);
                         await loadFromOneDrive();
                     } catch(e) { alert("Erro ao remover no Excel: " + e.message); }
                 } else {
