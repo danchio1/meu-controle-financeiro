@@ -535,6 +535,7 @@
             });
 
             document.getElementById('cardSaldo').textContent = `R$ ${ultimoSaldo.toFixed(2)}`;
+            document.getElementById('cardEntradas').textContent = `R$ ${totalEntradas.textContent || totalEntradas.toFixed(2)}`;
             document.getElementById('cardEntradas').textContent = `R$ ${totalEntradas.toFixed(2)}`;
             document.getElementById('cardSaidas').textContent = `R$ ${totalSaidas.toFixed(2)}`;
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
@@ -678,7 +679,7 @@
             }
         }
 
-        // Função de Remoção com Limpeza de Dados e Reescrita das Fórmulas de Saldo das Linhas Abaixo
+        // Função de Remoção Garantida sem #REF!: Limpa dados A,B,C,E e reescreve a fórmula na Coluna D
         async function deleteRecord(idx) {
             if (confirm("Deseja remover este registro da sua planilha do Excel no OneDrive?")) {
                 const monthName = months[currentMonthIdx];
@@ -700,7 +701,7 @@
                             body: JSON.stringify({ applyTo: 'contents' })
                         });
 
-                        // 2. Reescreve a fórmula da coluna D para que ela permaneça contínua e sem #REF!
+                        // 2. Reescreve a fórmula na coluna D apontando para a célula imediatamente acima (rowIdx - 1)
                         const formulaSaldo = `=IF(C${rowIdx}<>0,D${rowIdx-1}-C${rowIdx},D${rowIdx-1})`;
                         await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='D${rowIdx}')`, {
                             method: 'PATCH',
@@ -708,7 +709,7 @@
                             body: JSON.stringify({ formulas: [[formulaSaldo]] })
                         });
 
-                        alert(`Lançamento da linha ${rowIdx} removido do Excel sem quebrar as fórmulas de Saldo!`);
+                        alert(`Lançamento da linha ${rowIdx} removido do Excel mantendo as fórmulas de Saldo sem #REF!!`);
                         await loadFromOneDrive();
                     } catch(e) { alert("Erro ao remover no Excel: " + e.message); }
                 } else {
