@@ -678,33 +678,38 @@
             }
         }
 
-        // Função de Remoção Deletando a Linha do Excel (Shift Up)
+        // Função de Remoção com Limpeza de Dados e Reescrita das Fórmulas de Saldo das Linhas Abaixo
         async function deleteRecord(idx) {
-            if (confirm("Deseja remover este registro e excluir a linha correspondente no Excel?")) {
+            if (confirm("Deseja remover este registro da sua planilha do Excel no OneDrive?")) {
                 const monthName = months[currentMonthIdx];
                 const item = db[currentYear][monthName][idx];
 
                 if (accessToken && driveItemId && item.excelRowIndex) {
                     try {
                         const rowIdx = item.excelRowIndex;
-                        
-                        // Executa o comando oficial DELETE no range da linha para deslocar as linhas de baixo para cima (Up)
-                        const deleteRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:E${rowIdx}')/delete`, {
+
+                        // 1. Limpa os conteúdos das colunas A, B, C e E
+                        await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:C${rowIdx}')/clear`, {
                             method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${accessToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ shift: 'Up' })
+                            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ applyTo: 'contents' })
+                        });
+                        await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='E${rowIdx}')/clear`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ applyTo: 'contents' })
                         });
 
-                        if (deleteRes.ok) {
-                            alert(`Linha ${rowIdx} excluída da planilha do Excel no OneDrive com sucesso!`);
-                            await loadFromOneDrive();
-                        } else {
-                            const errText = await deleteRes.text();
-                            alert("Erro ao excluir linha no Excel: " + errText);
-                        }
+                        // 2. Reescreve a fórmula da coluna D para que ela permaneça contínua e sem #REF!
+                        const formulaSaldo = `=IF(C${rowIdx}<>0,D${rowIdx-1}-C${rowIdx},D${rowIdx-1})`;
+                        await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='D${rowIdx}')`, {
+                            method: 'PATCH',
+                            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ formulas: [[formulaSaldo]] })
+                        });
+
+                        alert(`Lançamento da linha ${rowIdx} removido do Excel sem quebrar as fórmulas de Saldo!`);
+                        await loadFromOneDrive();
                     } catch(e) { alert("Erro ao remover no Excel: " + e.message); }
                 } else {
                     db[currentYear][monthName].splice(idx, 1);
