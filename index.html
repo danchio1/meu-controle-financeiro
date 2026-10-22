@@ -180,7 +180,7 @@
                         <th>Descrição / Histórico</th>
                         <th>Valor (R$)</th>
                         <th>Saldo Resultante</th>
-                        <th>Tipo (Manual / Débito / DDA / Pix)</th>
+                        <th>Tipo (Manual / Débito / DDA / Pix / Transfer / Ganho)</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -555,7 +555,7 @@
             const valStr = prompt("Valor em R$ (Exemplo: 50 para gasto, -50 para salário/rendimento):");
             if (valStr === null) return;
 
-            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n\n(Digite o número ou o nome da opção):", "1");
+            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n5 - Transfer\n6 - Ganho\n\n(Digite o número ou o nome da opção):", "1");
             if (tipoInput === null) return;
 
             let tipo = "Manual";
@@ -563,6 +563,8 @@
             if (tClean === "2" || tClean === "débito" || tClean === "debito") tipo = "Débito";
             else if (tClean === "3" || tClean === "dda") tipo = "DDA";
             else if (tClean === "4" || tClean === "pix") tipo = "Pix";
+            else if (tClean === "5" || tClean === "transfer" || tClean === "transferência" || tClean === "transferencia") tipo = "Transfer";
+            else if (tClean === "6" || tClean === "ganho") tipo = "Ganho";
 
             const val = parseFloat(valStr.replace(',', '.')) || 0;
             const monthName = months[currentMonthIdx];
@@ -636,8 +638,10 @@
             if (item.tipo === "Débito") defaultVal = "2";
             else if (item.tipo === "DDA") defaultVal = "3";
             else if (item.tipo === "Pix") defaultVal = "4";
+            else if (item.tipo === "Transfer") defaultVal = "5";
+            else if (item.tipo === "Ganho") defaultVal = "6";
 
-            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n\n(Digite o número ou o nome da opção):", defaultVal);
+            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n5 - Transfer\n6 - Ganho\n\n(Digite o número ou o nome da opção):", defaultVal);
             if (tipoInput === null) return;
 
             let newTipo = "Manual";
@@ -645,6 +649,8 @@
             if (tClean === "2" || tClean === "débito" || tClean === "debito") newTipo = "Débito";
             else if (tClean === "3" || tClean === "dda") newTipo = "DDA";
             else if (tClean === "4" || tClean === "pix") newTipo = "Pix";
+            else if (tClean === "5" || tClean === "transfer" || tClean === "transferência" || tClean === "transferencia") newTipo = "Transfer";
+            else if (tClean === "6" || tClean === "ganho") newTipo = "Ganho";
 
             const valParsed = parseFloat(String(newValStr).replace(',', '.')) || 0;
 
