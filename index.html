@@ -537,7 +537,7 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
-        // Função de adição com envio direto ao Excel no OneDrive
+        // Função de gravação precisa buscando a última linha REAL com dados na coluna B
         async function openAddModal() {
             const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
             const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
@@ -564,35 +564,46 @@
             const val = parseFloat(valStr.replace(',', '.')) || 0;
             const monthName = months[currentMonthIdx];
 
-            // 1. Gravar diretamente na planilha do Excel via Microsoft Graph API
+            if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
+            db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
+            
+            // Gravação inteligente no OneDrive buscando a última linha real com histórico na Coluna B
             if (accessToken && driveItemId) {
                 try {
-                    // Busca a dimensão atual para colocar na próxima linha vazia
-                    const rangeRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/usedRange`, {
+                    const rangeRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='B1:B100')`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     const rangeData = await rangeRes.json();
-                    const nextRowIdx = rangeData.rowCount ? (rangeData.rowCount + 1) : 2;
+                    
+                    let lastFilledRow = 1;
+                    if (rangeData.values) {
+                        for (let i = 0; i < rangeData.values.length; i++) {
+                            const valB = rangeData.values[i][0];
+                            if (valB !== null && valB !== undefined && String(valB).trim() !== "") {
+                                lastFilledRow = i + 1;
+                            }
+                        }
+                    }
+                    
+                    const targetRowIdx = lastFilledRow + 1;
 
-                    // Atualiza exatamente na primeira linha vazia do Excel
-                    await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${nextRowIdx}:E${nextRowIdx}')`, {
+                    // Escreve na primeira linha vazia verdadeira da planilha
+                    await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${targetRowIdx}:E${targetRowIdx}')`, {
                         method: 'PATCH',
                         headers: {
                             'Authorization': `Bearer ${accessToken}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            values: [[dtParsed, hist, val, `=IF(C${nextRowIdx}<>0,D${nextRowIdx-1}-C${nextRowIdx},D${nextRowIdx-1})`, tipo]]
+                            values: [[dtParsed, hist, val, `=IF(C${targetRowIdx}<>0,D${targetRowIdx-1}-C${targetRowIdx},D${targetRowIdx-1})`, tipo]]
                         })
                     });
-                    alert("Lançamento gravado diretamente na planilha do OneDrive com sucesso!");
+                    alert(`Lançamento gravado diretamente na linha ${targetRowIdx} da planilha do OneDrive com sucesso!`);
                     await loadFromOneDrive();
                 } catch(e) {
                     alert("Aviso: Lançamento exibido na tela, mas falhou ao gravar no Excel: " + e.message);
                 }
             } else {
-                if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
-                db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
                 renderData();
             }
         }
