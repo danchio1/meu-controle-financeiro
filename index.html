@@ -138,7 +138,7 @@
                 <span class="sync-badge" id="syncBadge">🔌 OneDrive Desconectado</span>
                 <button id="msLoginBtn" onclick="loginMicrosoft()" style="background: #0078d4; color: white; border: none; font-weight: 600;">🔑 Entrar na Conta Microsoft</button>
                 
-                <!-- Caixa de Seleção das Planilhas da pasta 'Pendrive' -->
+                <!-- Caixa de Seleção Filtrada -->
                 <select id="fileSelect" onchange="selectOneDriveFile()" style="display:none; font-weight: 600; border-color: var(--accent);"></select>
 
                 <select id="yearSelect" onchange="changeYear()"></select>
@@ -226,7 +226,7 @@
 
         async function loginMicrosoft() {
             if (!msalInstance) {
-                alert("A carregar biblioteca Microsoft. Tente em alguns segundos.");
+                alert("Carregando biblioteca Microsoft. Tente novamente em alguns segundos.");
                 return;
             }
             try {
@@ -237,27 +237,52 @@
                 document.getElementById('syncBadge').textContent = "☁️ OneDrive Conectado";
                 document.getElementById('msLoginBtn').style.display = "none";
                 
-                await listOneDriveFilesFromPendrive();
+                await listOneDriveFilesFiltered();
             } catch(e) {
                 alert("Erro ao conectar com a conta Microsoft: " + e.message);
             }
         }
 
-        // Busca exclusivamente planilhas da pasta 'Pendrive'
-        async function listOneDriveFilesFromPendrive() {
+        // Busca aumentada (até 200 itens) com filtro estrito de "Gastos"
+        async function listOneDriveFilesFiltered() {
             if (!accessToken) return;
             try {
-                // Rota exata da pasta Pendrive no OneDrive
-                let url = `https://graph.microsoft.com/v1.0/me/drive/root:/Pendrive:/children`;
-                let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-                let data = await res.json();
+                let allFiles = [];
 
-                if (data.value && data.value.length > 0) {
-                    const files = data.value.filter(f => f.name.toLowerCase().endsWith('.xlsx'));
-                    
-                    const select = document.getElementById('fileSelect');
-                    select.innerHTML = '<option value="">-- Selecione a Planilha da pasta Pendrive --</option>';
-                    files.forEach((file) => {
+                // 1. Tenta buscar da pasta Pendrive
+                try {
+                    let urlPendrive = `https://graph.microsoft.com/v1.0/me/drive/root:/Pendrive:/children?$top=100`;
+                    let resP = await fetch(urlPendrive, { headers: { Authorization: `Bearer ${accessToken}` } });
+                    let dataP = await resP.json();
+                    if (dataP.value) allFiles = allFiles.concat(dataP.value);
+                } catch(errP) {}
+
+                // 2. Busca ampla no OneDrive com limite de 200 itens
+                let urlSearch = `https://graph.microsoft.com/v1.0/me/drive/root/search(q='Gastos')?$top=200`;
+                let resS = await fetch(urlSearch, { headers: { Authorization: `Bearer ${accessToken}` } });
+                let dataS = await resS.json();
+                if (dataS.value) allFiles = allFiles.concat(dataS.value);
+
+                // Remover duplicados pelo ID
+                const uniqueMap = new Map();
+                allFiles.forEach(f => uniqueMap.set(f.id, f));
+                const uniqueFiles = Array.from(uniqueMap.values());
+
+                // Filtro ESTRITO: Apenas arquivos .xlsx que contenham 'Gastos' no nome
+                const filteredGastos = uniqueFiles.filter(f => 
+                    f.name && 
+                    f.name.toLowerCase().endsWith('.xlsx') && 
+                    f.name.toLowerCase().includes('gastos')
+                );
+
+                // Ordenar nomes por ordem decrescente (ex: 2026 antes de 2025)
+                filteredGastos.sort((a,b) => b.name.localeCompare(a.name));
+
+                const select = document.getElementById('fileSelect');
+                select.innerHTML = '<option value="">-- Selecione a Planilha de Gastos --</option>';
+
+                if (filteredGastos.length > 0) {
+                    filteredGastos.forEach((file) => {
                         const opt = document.createElement('option');
                         opt.value = file.id;
                         opt.textContent = file.name;
@@ -265,13 +290,11 @@
                     });
                     
                     select.style.display = "inline-block";
-                    alert("Conectado! Escolha a sua planilha da pasta 'Pendrive' no menu do topo.");
                 } else {
-                    alert("Nenhum arquivo de planilha (.xlsx) foi encontrado dentro da sua pasta 'Pendrive' no OneDrive. Verifique se os seus arquivos de Gastos estão salvos nessa pasta.");
+                    alert("Nenhum arquivo de 'Gastos (.xlsx)' foi localizado. Verifique se o nome da planilha contém a palavra 'Gastos'.");
                 }
             } catch(e) {
-                console.warn("Erro ao buscar arquivos da pasta Pendrive:", e);
-                alert("Não foi possível acessar a pasta 'Pendrive'. Verifique se o nome da pasta no OneDrive está exatamente como 'Pendrive'.");
+                console.warn("Erro ao listar planilhas:", e);
             }
         }
 
@@ -477,7 +500,7 @@
             const records = db[currentYear]?.[monthName] || [];
 
             if (records.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Clique no botão azul <b>🔑 Entrar na Conta Microsoft</b> no topo e escolha a planilha na pasta 'Pendrive'.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Clique no botão azul <b>🔑 Entrar na Conta Microsoft</b> no topo e escolha a sua planilha de Gastos.</td></tr>`;
                 document.getElementById('cardSaldo').textContent = "R$ 0,00";
                 document.getElementById('cardEntradas').textContent = "R$ 0,00";
                 document.getElementById('cardSaidas').textContent = "R$ 0,00";
