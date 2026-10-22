@@ -89,6 +89,20 @@
         .tab-btn { background: none; border: none; padding: 8px 14px; border-radius: 6px; color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
         .tab-btn.active { background: var(--accent); color: white; font-weight: 600; }
         
+        /* Painel de Filtros */
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: var(--bg-card);
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .filter-bar label { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
+
         .table-container { 
             background: var(--bg-card); 
             border-radius: 12px; 
@@ -170,6 +184,35 @@
 
         <div class="tabs-container">
             <div class="tabs" id="monthTabs"></div>
+        </div>
+
+        <!-- Barra de Filtros Rápida -->
+        <div class="filter-bar">
+            <div>
+                <label>🔍 Buscar:</label>
+                <input type="text" id="searchInput" placeholder="Pesquisar histórico..." oninput="renderData()">
+            </div>
+            <div>
+                <label>🏷️ Tipo:</label>
+                <select id="filterTipo" onchange="renderData()">
+                    <option value="">Todos os Tipos</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Débito">Débito</option>
+                    <option value="DDA">DDA</option>
+                    <option value="Manual">Manual</option>
+                    <option value="Transfer">Transfer</option>
+                    <option value="Ganho">Ganho</option>
+                </select>
+            </div>
+            <div>
+                <label>📅 Período:</label>
+                <select id="filterData" onchange="renderData()">
+                    <option value="">Todo o Mês</option>
+                    <option value="hoje">Hoje</option>
+                    <option value="ontem">Ontem</option>
+                    <option value="7dias">Últimos 7 dias</option>
+                </select>
+            </div>
         </div>
 
         <div class="table-container">
@@ -496,8 +539,43 @@
             
             const records = db[currentYear]?.[monthName] || [];
 
-            if (records.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Clique no botão azul <b>🔑 Entrar na Conta Microsoft</b> no topo e escolha a sua planilha de Gastos.</td></tr>`;
+            // Pega os filtros
+            const searchText = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+            const filterTipo = document.getElementById('filterTipo')?.value || '';
+            const filterData = document.getElementById('filterData')?.value || '';
+
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            const sevenDaysAgo = new Date(today);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+            // Aplica os filtros
+            const filteredRecords = records.filter(rec => {
+                // Manter Saldo Inicial visível
+                if (rec.historico === "Saldo Inicial" || rec.data === "Saldo Inicial") return true;
+
+                // Filtro por Busca de Texto
+                if (searchText && !rec.historico.toLowerCase().includes(searchText)) return false;
+
+                // Filtro por Tipo (Pix, Débito, DDA, etc.)
+                if (filterTipo && rec.tipo !== filterTipo) return false;
+
+                // Filtro por Data
+                if (filterData === 'hoje' && rec.data !== todayStr) return false;
+                if (filterData === 'ontem' && rec.data !== yesterdayStr) return false;
+                if (filterData === '7dias' && (rec.data < sevenDaysAgoStr || rec.data > todayStr)) return false;
+
+                return true;
+            });
+
+            if (filteredRecords.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento encontrado com os filtros selecionados.</td></tr>`;
                 document.getElementById('cardSaldo').textContent = "R$ 0,00";
                 document.getElementById('cardEntradas').textContent = "R$ 0,00";
                 document.getElementById('cardSaidas').textContent = "R$ 0,00";
@@ -507,9 +585,9 @@
 
             let totalEntradas = 0;
             let totalSaidas = 0;
-            let ultimoSaldo = records.length ? records[records.length - 1].saldo : 0;
+            let ultimoSaldo = filteredRecords.length ? filteredRecords[filteredRecords.length - 1].saldo : 0;
 
-            records.forEach((rec, i) => {
+            filteredRecords.forEach((rec, i) => {
                 const val = parseFloat(rec.valor) || 0;
                 if (val < 0) totalEntradas += Math.abs(val);
                 else totalSaidas += val;
