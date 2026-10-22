@@ -186,11 +186,10 @@
     </div>
 
     <script>
-        const APP_PASSWORD = "17Junho00!"; // Senha mantida
-        const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833"; // ID do Azure
-        const FILE_NAME = "Gastos 2026 Bancos.xlsx"; // Nome da planilha
+        const APP_PASSWORD = "17Junho00!";
+        const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833";
+        const FILE_NAME = "Gastos 2026 Bancos.xlsx";
 
-        // Configuração do MSAL
         const msalConfig = {
             auth: {
                 clientId: CLIENT_ID,
@@ -215,9 +214,6 @@
             if (val === APP_PASSWORD) {
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('appContent').style.display = 'block';
-                // Força o carregamento limpo da nova interface
-                localStorage.removeItem('finDB_blank_v2');
-                localStorage.removeItem('finDB_local_final');
                 init();
             } else {
                 alert("Senha incorreta!");
@@ -227,7 +223,7 @@
 
         async function loginMicrosoft() {
             if (!msalInstance) {
-                alert("Serviço de autenticação da Microsoft ainda está carregando. Tente em alguns segundos.");
+                alert("A carregar biblioteca Microsoft. Tente em alguns segundos.");
                 return;
             }
             try {
@@ -253,8 +249,19 @@
             if (data.value && data.value.length > 0) {
                 driveItemId = data.value[0].id;
             } else {
-                alert(`Arquivo '${FILE_NAME}' não foi encontrado no seu OneDrive. Verifique se o arquivo está na pasta raiz ou pesquisável no seu OneDrive Pessoal.`);
+                alert(`Ficheiro '${FILE_NAME}' não foi encontrado no seu OneDrive.`);
             }
+        }
+
+        // Converte o número serial do Excel (ex: 45933) para AAAA-MM-DD
+        function excelSerialToISO(serial) {
+            if (typeof serial === 'number' && serial > 30000) {
+                const utcDays = Math.floor(serial - 25569);
+                const utcValue = utcDays * 86400;
+                const dateObj = new Date(utcValue * 1000);
+                return dateObj.toISOString().split('T')[0];
+            }
+            return String(serial || '');
         }
 
         async function loadFromOneDrive() {
@@ -269,14 +276,42 @@
                 if (data.values && data.values.length > 1) {
                     const rows = data.values.slice(1);
                     db[currentYear][monthName] = [];
+                    let hasSaldoInicial = false;
+
                     rows.forEach(r => {
-                        if (r[0] || r[1] || r[2] || r[3]) {
+                        const rawDate = r[0];
+                        const rawHist = r[1] ? String(r[1]).trim() : "";
+                        const rawVal = parseFloat(r[2]) || 0;
+                        const rawSaldo = parseFloat(r[3]) || 0;
+                        const rawTipo = r[4] ? String(r[4]).trim() : "Manual";
+
+                        // Ignorar linhas completamente vazias
+                        if (!rawDate && !rawHist && rawVal === 0 && rawSaldo === 0) return;
+
+                        // Tratar Saldo Inicial (evitar duplicados de linhas vazias)
+                        if (rawHist === "Saldo Inicial" || rawDate === "1900-01-01" || rawDate === "Saldo Inicial" || rawDate === 1) {
+                            if (!hasSaldoInicial) {
+                                db[currentYear][monthName].push({
+                                    data: "Saldo Inicial",
+                                    historico: "Saldo Inicial",
+                                    valor: 0,
+                                    saldo: rawSaldo,
+                                    tipo: ""
+                                });
+                                hasSaldoInicial = true;
+                            }
+                            return;
+                        }
+
+                        const isoDate = excelSerialToISO(rawDate);
+
+                        if (rawHist || rawVal !== 0) {
                             db[currentYear][monthName].push({
-                                data: r[0] ? String(r[0]) : "Saldo Inicial",
-                                historico: r[1] ? String(r[1]) : "",
-                                valor: parseFloat(r[2]) || 0,
-                                saldo: parseFloat(r[3]) || 0,
-                                tipo: r[4] ? String(r[4]) : "Manual"
+                                data: parseToISO(isoDate),
+                                historico: rawHist,
+                                valor: rawVal,
+                                saldo: rawSaldo,
+                                tipo: rawTipo
                             });
                         }
                     });
