@@ -678,9 +678,9 @@
             }
         }
 
-        // Função de Remoção Preservando a Fórmula da Coluna D (Saldo)
+        // Função de Remoção Deletando a Linha do Excel (Shift Up)
         async function deleteRecord(idx) {
-            if (confirm("Deseja remover este registro da sua planilha do Excel no OneDrive?")) {
+            if (confirm("Deseja remover este registro e excluir a linha correspondente no Excel?")) {
                 const monthName = months[currentMonthIdx];
                 const item = db[currentYear][monthName][idx];
 
@@ -688,31 +688,22 @@
                     try {
                         const rowIdx = item.excelRowIndex;
                         
-                        // 1. Limpa o conteúdo das colunas A, B e C (Data, Histórico e Valor)
-                        const clearABC = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:C${rowIdx}')/clear`, {
+                        // Executa o comando oficial DELETE no range da linha para deslocar as linhas de baixo para cima (Up)
+                        const deleteRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='A${rowIdx}:E${rowIdx}')/delete`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${accessToken}`,
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({ applyTo: 'contents' })
+                            body: JSON.stringify({ shift: 'Up' })
                         });
 
-                        // 2. Limpa o conteúdo da coluna E (Tipo de Pagamento)
-                        const clearE = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/range(address='E${rowIdx}')/clear`, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${accessToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ applyTo: 'contents' })
-                        });
-
-                        if (clearABC.ok && clearE.ok) {
-                            alert(`Lançamento da linha ${rowIdx} removido do Excel mantendo a fórmula da coluna D de Saldo!`);
+                        if (deleteRes.ok) {
+                            alert(`Linha ${rowIdx} excluída da planilha do Excel no OneDrive com sucesso!`);
                             await loadFromOneDrive();
                         } else {
-                            alert("Erro ao remover dados das células no Excel.");
+                            const errText = await deleteRes.text();
+                            alert("Erro ao excluir linha no Excel: " + errText);
                         }
                     } catch(e) { alert("Erro ao remover no Excel: " + e.message); }
                 } else {
