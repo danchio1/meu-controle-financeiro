@@ -137,6 +137,11 @@
             <div class="controls">
                 <span class="sync-badge" id="syncBadge">🔌 OneDrive Desconectado</span>
                 <button id="msLoginBtn" onclick="loginMicrosoft()" style="background: #0078d4; color: white; border: none; font-weight: 600;">🔑 Entrar na Conta Microsoft</button>
+                
+                <!-- Seletor manual de planilhas do OneDrive -->
+                <select id="fileSelect" onchange="selectOneDriveFile()" style="display:none; font-weight: 600; border-color: var(--accent);"></select>
+                <button id="browseBtn" onclick="listOneDriveFiles()" style="display:none; background: var(--border-color);">📁 Buscar Pasta 'Pendrive'</button>
+
                 <select id="yearSelect" onchange="changeYear()"></select>
                 <button onclick="addYear()">+ Novo Ano</button>
                 <button class="btn-primary" onclick="openAddModal()">+ Lançamento</button>
@@ -188,7 +193,6 @@
     <script>
         const APP_PASSWORD = "17Junho00!";
         const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833";
-        const FILE_NAME = "Gastos 2026 Bancos.xlsx";
 
         const msalConfig = {
             auth: {
@@ -202,6 +206,7 @@
         let msalInstance = null;
         let accessToken = null;
         let driveItemId = null;
+        let availableFiles = [];
 
         try {
             if (window.msal) {
@@ -233,44 +238,77 @@
                 accessToken = loginResponse.accessToken;
                 document.getElementById('syncBadge').textContent = "☁️ OneDrive Conectado";
                 document.getElementById('msLoginBtn').style.display = "none";
-                await findExcelFile();
-                await loadFromOneDrive();
+                document.getElementById('browseBtn').style.display = "inline-block";
+                
+                await listOneDriveFiles();
             } catch(e) {
                 alert("Erro ao conectar com a conta Microsoft: " + e.message);
             }
         }
 
-        async function findExcelFile() {
+        // Busca planilhas .xlsx na pasta "Pendrive" ou na raiz do OneDrive
+        async function listOneDriveFiles() {
             if (!accessToken) return;
-            const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='Gastos 2026 Bancos.xlsx')`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            });
-            const data = await res.json();
-            
-            // Procura arquivo exatamente igual a Gastos 2026 Bancos.xlsx
-            if (data.value && data.value.length > 0) {
-                const exactMatch = data.value.find(item => item.name.toLowerCase() === "gastos 2026 bancos.xlsx");
-                driveItemId = exactMatch ? exactMatch.id : data.value[0].id;
-            } else {
-                alert(`Ficheiro '${FILE_NAME}' não foi encontrado no seu OneDrive.`);
+            try {
+                // Tenta procurar na pasta 'Pendrive' primeiro
+                let url = `https://graph.microsoft.com/v1.0/me/drive/root:/Pendrive:/children`;
+                let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+                let data = await res.json();
+
+                // Se não achar a pasta Pendrive, busca planilhas em todo o OneDrive
+                if (!data.value || data.value.length === 0) {
+                    url = `https://graph.microsoft.com/v1.0/me/drive/root/search(q='.xlsx')`;
+                    res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+                    data = await res.json();
+                }
+
+                if (data.value && data.value.length > 0) {
+                    availableFiles = data.value.filter(f => f.name.endsWith('.xlsx'));
+                    
+                    const select = document.getElementById('fileSelect');
+                    select.innerHTML = '<option value="">-- Selecione a Planilha --</option>';
+                    availableFiles.forEach((file, idx) => {
+                        const opt = document.createElement('option');
+                        opt.value = file.id;
+                        opt.textContent = file.name;
+                        
+                        // Seleciona automaticamente se for "Gastos 2026 Bancos.xlsx"
+                        if (file.name.toLowerCase().includes("2026")) {
+                            opt.selected = true;
+                            driveItemId = file.id;
+                        }
+                        select.appendChild(opt);
+                    });
+                    
+                    select.style.display = "inline-block";
+
+                    if (driveItemId) {
+                        await loadFromOneDrive();
+                    }
+                } else {
+                    alert("Nenhum arquivo .xlsx foi encontrado na sua pasta 'Pendrive' ou OneDrive.");
+                }
+            } catch(e) {
+                console.warn("Erro ao listar arquivos do OneDrive:", e);
             }
         }
 
-        // Converte qualquer formato de data recebido do Excel para AAAA-MM-DD
-        function convertExcelDateToISO(rawVal) {
-            if (!rawVal || rawVal === "Saldo Inicial" || rawVal === "1900-01-01" || rawVal === 1) return "Saldo Inicial";
+        async function selectOneDriveFile() {
+            const select = document.getElementById('fileSelect');
+            if (select.value) {
+                driveItemId = select.value;
+                await loadFromOneDrive();
+            }
+        }
 
-            // Se for número serial do Excel (ex: 46297)
-            const num = Number(rawVal);
+        function excelSerialToISO(serial) {
+            const num = Number(serial);
             if (!isNaN(num) && num > 30000) {
                 const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
                 return dateObj.toISOString().split('T')[0];
             }
-
-            // Se for texto do tipo 2026-10-02T00:00:00Z
-            let str = String(rawVal).trim();
+            let str = String(serial || '').trim();
             if (str.includes('T')) str = str.split('T')[0];
-
             return parseToISO(str);
         }
 
@@ -295,10 +333,8 @@
                         const rawSaldo = parseFloat(r[3]) || 0;
                         const rawTipo = r[4] ? String(r[4]).trim() : "Manual";
 
-                        // Ignorar linhas vazias sem histórico nem valores
                         if (!rawDate && !rawHist && rawVal === 0 && rawSaldo === 0) return;
 
-                        // Tratar Saldo Inicial (garantir apenas um)
                         if (rawHist === "Saldo Inicial" || rawDate === "1900-01-01" || rawDate === "Saldo Inicial" || rawDate === 1) {
                             if (!hasSaldoInicial) {
                                 db[currentYear][monthName].push({
@@ -313,7 +349,7 @@
                             return;
                         }
 
-                        const isoDate = convertExcelDateToISO(rawDate);
+                        const isoDate = excelSerialToISO(rawDate);
 
                         if (rawHist || rawVal !== 0) {
                             db[currentYear][monthName].push({
