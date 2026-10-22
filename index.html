@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestão Financeira Pessoal</title>
+    <title>Gestão Financeira Pessoal - OneDrive</title>
+    <!-- SDK do MSAL (Microsoft Authentication Library) -->
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
     <style>
         :root {
             --bg-primary: #f8fafc;
@@ -44,7 +46,7 @@
             border-radius: 16px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             text-align: center;
-            max-width: 360px;
+            max-width: 380px;
             width: 90%;
         }
         .login-box h2 { margin-bottom: 12px; font-size: 1.3rem; }
@@ -111,6 +113,7 @@
         .actions-cell { display: flex; gap: 6px; }
         .btn-sm { padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; }
         .btn-edit { background: var(--border-color); }
+        .sync-badge { font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; background: rgba(37, 99, 235, 0.1); color: var(--accent); border: 1px solid var(--accent); }
         .empty-notice { padding: 30px; text-align: center; color: var(--text-secondary); font-size: 0.95rem; }
         @media (max-width: 600px) { body { padding: 10px; } header { flex-direction: column; align-items: flex-start; } }
     </style>
@@ -132,13 +135,12 @@
         <header>
             <h1>Controle de Bancos & Gastos</h1>
             <div class="controls">
+                <span class="sync-badge" id="syncBadge">🔌 OneDrive Desconectado</span>
+                <button id="msLoginBtn" onclick="loginMicrosoft()" style="background: #0078d4; color: white; border: none; font-weight: 600;">🔑 Entrar na Conta Microsoft</button>
                 <select id="yearSelect" onchange="changeYear()"></select>
                 <button onclick="addYear()">+ Novo Ano</button>
                 <button class="btn-primary" onclick="openAddModal()">+ Lançamento</button>
-                <button class="btn-primary" style="background: var(--success);" onclick="document.getElementById('importFile').click()">📂 Importar Backup (JSON)</button>
-                <button onclick="exportData()">💾 Exportar Backup (JSON)</button>
-                <input type="file" id="importFile" style="display:none" onchange="importData(event)" accept=".json">
-                <button onclick="clearAllData()" style="color: var(--danger);">🗑️ Limpar Tudo</button>
+                <button onclick="exportData()">💾 Backup Local (JSON)</button>
                 <button onclick="toggleTheme()">🌓 Tema</button>
             </div>
         </header>
@@ -184,7 +186,23 @@
     </div>
 
     <script>
-        const APP_PASSWORD = "17Junho00!"; // Senha mantida
+        const APP_PASSWORD = "17Junho00!"; // Senha de acesso mantida
+        const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833"; // Seu ID gerado no Azure
+        const FILE_NAME = "Gastos 2026 Bancos.xlsx"; // Nome da sua planilha
+
+        // Configuração do MSAL
+        const msalConfig = {
+            auth: {
+                clientId: CLIENT_ID,
+                authority: "https://login.microsoftonline.com/common",
+                redirectUri: window.location.origin + window.location.pathname
+            },
+            cache: { cacheLocation: "localStorage" }
+        };
+
+        const msalInstance = new msal.PublicClientApplication(msalConfig);
+        let accessToken = null;
+        let driveItemId = null;
 
         function checkPass() {
             const val = document.getElementById('passInput').value;
@@ -198,11 +216,68 @@
             }
         }
 
+        async function loginMicrosoft() {
+            try {
+                const loginResponse = await msalInstance.loginPopup({
+                    scopes: ["Files.ReadWrite", "User.Read"]
+                });
+                accessToken = loginResponse.accessToken;
+                document.getElementById('syncBadge').textContent = "☁️ OneDrive Conectado";
+                document.getElementById('msLoginBtn').style.display = "none";
+                await findExcelFile();
+                await loadFromOneDrive();
+            } catch(e) {
+                alert("Erro ao conectar com a conta Microsoft: " + e.message);
+            }
+        }
+
+        async function findExcelFile() {
+            if (!accessToken) return;
+            const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='${FILE_NAME}')`, {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            const data = await res.json();
+            if (data.value && data.value.length > 0) {
+                driveItemId = data.value[0].id;
+            } else {
+                alert(`Arquivo '${FILE_NAME}' não foi encontrado na sua conta do OneDrive. Certifique-se de que o arquivo está salvo no seu OneDrive.`);
+            }
+        }
+
+        async function loadFromOneDrive() {
+            if (!driveItemId || !accessToken) return;
+            try {
+                const monthName = months[currentMonthIdx];
+                const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/usedRange`, {
+                    headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                const data = await res.json();
+                
+                if (data.values && data.values.length > 1) {
+                    const rows = data.values.slice(1);
+                    db[currentYear][monthName] = [];
+                    rows.forEach(r => {
+                        if (r[0] || r[1] || r[2] || r[3]) {
+                            db[currentYear][monthName].push({
+                                data: r[0] ? String(r[0]) : "Saldo Inicial",
+                                historico: r[1] ? String(r[1]) : "",
+                                valor: parseFloat(r[2]) || 0,
+                                saldo: parseFloat(r[3]) || 0,
+                                tipo: r[4] ? String(r[4]) : "Manual"
+                            });
+                        }
+                    });
+                    renderData();
+                }
+            } catch(e) {
+                console.warn("Erro ao ler do Excel no OneDrive:", e);
+            }
+        }
+
         const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
         let currentYear = 2026;
         let currentMonthIdx = 0;
 
-        // Estrutura padrão zerada
         const emptyData = {
             "2026": {
                 "JANEIRO": [], "FEVEREIRO": [], "MARÇO": [], "ABRIL": [],
@@ -211,8 +286,7 @@
             }
         };
 
-        // Chave de memória atualizada para ignorar cache antigo
-        let db = JSON.parse(localStorage.getItem('finDB_blank_v2')) || emptyData;
+        let db = emptyData;
 
         function init() {
             if (!db[currentYear]) {
@@ -300,10 +374,14 @@
                 const btn = document.createElement('button');
                 btn.className = `tab-btn ${idx === currentMonthIdx ? 'active' : ''}`;
                 btn.textContent = m;
-                btn.onclick = () => {
+                btn.onclick = async () => {
                     currentMonthIdx = idx;
                     renderTabs();
-                    renderData();
+                    if (accessToken && driveItemId) {
+                        await loadFromOneDrive();
+                    } else {
+                        renderData();
+                    }
                 };
                 container.appendChild(btn);
             });
@@ -319,7 +397,7 @@
             const records = db[currentYear]?.[monthName] || [];
 
             if (records.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento neste mês. Clique no botão verde <b>📂 Importar Backup (JSON)</b> no topo para carregar os seus dados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Clique no botão azul <b>🔑 Entrar na Conta Microsoft</b> no topo para carregar a sua planilha do OneDrive.</td></tr>`;
                 document.getElementById('cardSaldo').textContent = "R$ 0,00";
                 document.getElementById('cardEntradas').textContent = "R$ 0,00";
                 document.getElementById('cardSaidas').textContent = "R$ 0,00";
@@ -362,7 +440,7 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
-        function openAddModal() {
+        async function openAddModal() {
             const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
             const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
 
@@ -390,7 +468,23 @@
 
             if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
             db[currentYear][monthName].push({ data: dtParsed, historico: hist, valor: val, saldo: 0, tipo: tipo });
-            saveData();
+            
+            // Gravação no OneDrive via Graph API
+            if (accessToken && driveItemId) {
+                try {
+                    await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${driveItemId}/workbook/worksheets('${monthName}')/tables/Table1/rows/add`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            values: [[dtParsed, hist, val, 0, tipo]]
+                        })
+                    });
+                } catch(e) { console.warn("Erro ao gravar na planilha do OneDrive:", e); }
+            }
+
             renderData();
         }
 
@@ -428,7 +522,6 @@
             item.historico = newHist;
             item.valor = valParsed;
             item.tipo = newTipo;
-            saveData();
             renderData();
         }
 
@@ -436,25 +529,8 @@
             if (confirm("Deseja remover este registro?")) {
                 const monthName = months[currentMonthIdx];
                 db[currentYear][monthName].splice(idx, 1);
-                saveData();
                 renderData();
             }
-        }
-
-        function clearAllData() {
-            if (confirm("Tem certeza de que deseja apagar todos os dados guardados neste navegador?")) {
-                localStorage.clear();
-                db = JSON.parse(JSON.stringify(emptyData));
-                renderYearSelect();
-                renderData();
-                alert("Memória local limpa com sucesso!");
-            }
-        }
-
-        function saveData() {
-            try {
-                localStorage.setItem('finDB_blank_v2', JSON.stringify(db));
-            } catch(e) {}
         }
 
         function changeYear() {
@@ -468,7 +544,6 @@
                 db[y] = {};
                 months.forEach(m => db[y][m] = []);
                 currentYear = y;
-                saveData();
                 renderYearSelect();
                 renderData();
             }
@@ -482,26 +557,6 @@
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
-        }
-
-        function importData(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const parsed = JSON.parse(e.target.result);
-                    db = parsed;
-                    saveData();
-                    renderYearSelect();
-                    renderData();
-                    alert("Backup importado com sucesso!");
-                } catch(err) {
-                    alert("Formato de arquivo JSON inválido.");
-                }
-            };
-            reader.readAsText(file);
         }
 
         function toggleTheme() {
