@@ -187,12 +187,12 @@
 
     <script>
         // Configuração de Senha
-        const APP_PASSWORD = "1234"; // Substitua aqui pela sua senha
+        const APP_PASSWORD = "1234";
 
         // Nome da Tabela no Supabase
         const TABLE_NAME = 'transacoes1';
 
-        // Supabase Client
+        // URL e Key do Supabase (URL ajustada para o endpoint base)
         const SUPABASE_URL = "https://symyyfkzzootvkliygmy.supabase.co";
         const SUPABASE_KEY = "sb_publishable_lz_l3T9Bipoi3HNa_qpUXg_OBnMr97Z";
         let supabase = null;
@@ -202,15 +202,15 @@
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             }
         } catch(e) {
-            console.warn("Supabase SDK indisponível, usando modo offline.");
+            console.warn("Supabase SDK indisponível, operando localmente.");
         }
 
-        async function checkPass() {
+        function checkPass() {
             const val = document.getElementById('passInput').value;
             if (val === APP_PASSWORD) {
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('appContent').style.display = 'block';
-                await init();
+                init();
             } else {
                 alert("Senha incorreta!");
                 document.getElementById('passInput').value = '';
