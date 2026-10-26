@@ -539,7 +539,6 @@
             
             const records = db[currentYear]?.[monthName] || [];
 
-            // Pega os filtros
             const searchText = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
             const filterTipo = document.getElementById('filterTipo')?.value || '';
             const filterData = document.getElementById('filterData')?.value || '';
@@ -555,18 +554,13 @@
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
 
-            // Aplica os filtros
             const filteredRecords = records.filter(rec => {
-                // Manter Saldo Inicial visível
                 if (rec.historico === "Saldo Inicial" || rec.data === "Saldo Inicial") return true;
 
-                // Filtro por Busca de Texto
                 if (searchText && !rec.historico.toLowerCase().includes(searchText)) return false;
 
-                // Filtro por Tipo (Pix, Débito, DDA, etc.)
                 if (filterTipo && rec.tipo !== filterTipo) return false;
 
-                // Filtro por Data
                 if (filterData === 'hoje' && rec.data !== todayStr) return false;
                 if (filterData === 'ontem' && rec.data !== yesterdayStr) return false;
                 if (filterData === '7dias' && (rec.data < sevenDaysAgoStr || rec.data > todayStr)) return false;
@@ -618,11 +612,17 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
+        // Função de Adicionar com a DATA DE HOJE dinâmica como padrão
         async function openAddModal() {
-            const currentMonthNum = (currentMonthIdx + 1).toString().padStart(2, '0');
-            const defaultPromptDate = `21/${currentMonthNum}/${currentYear}`;
+            const now = new Date();
+            const todayDay = String(now.getDate()).padStart(2, '0');
+            const todayMonth = String(now.getMonth() + 1).padStart(2, '0');
+            const todayYear = now.getFullYear();
+            
+            // Padrão automático: data de hoje (ex: 26/10/2026)
+            const defaultPromptDate = `${todayDay}/${todayMonth}/${todayYear}`;
 
-            const dtPrompt = prompt(`Data do registro (ex: 25 para dia 25/${currentMonthNum}/${currentYear} ou DD/MM/AAAA):`, defaultPromptDate);
+            const dtPrompt = prompt(`Data do registro (ex: 25 para dia 25 do mês ou DD/MM/AAAA):`, defaultPromptDate);
             if (dtPrompt === null) return;
 
             const dtParsed = parseToISO(dtPrompt);
