@@ -19,7 +19,7 @@
             --success: #10b981;
         }
 
-        .dark {
+        body.dark {
             --bg-primary: #0f172a;
             --bg-card: #1e293b;
             --text-primary: #f8fafc;
@@ -133,7 +133,7 @@
         @media (max-width: 600px) { body { padding: 10px; } header { flex-direction: column; align-items: flex-start; } }
     </style>
 </head>
-<body>
+<body class="dark">
 
     <!-- Tela de Bloqueio por Senha -->
     <div id="loginOverlay">
@@ -238,6 +238,14 @@
     <script>
         const APP_PASSWORD = "17Junho00!";
         const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833";
+
+        // Aplica o tema salvo ou usa escuro como padrão
+        const savedTheme = localStorage.getItem('appTheme') || 'dark';
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark');
+        } else {
+            document.body.classList.remove('dark');
+        }
 
         const msalConfig = {
             auth: {
@@ -819,7 +827,8 @@
         }
 
         function toggleTheme() {
-            document.body.classList.toggle('dark');
+            const isDark = document.body.classList.toggle('dark');
+            localStorage.setItem('appTheme', isDark ? 'dark' : 'light');
         }
     </script>
 </body>
