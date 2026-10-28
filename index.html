@@ -80,10 +80,11 @@
         select, button, input { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font-size: 0.9rem; cursor: pointer; }
         button.btn-primary { background: var(--accent); color: white; border: none; font-weight: 600; }
         button.btn-primary:hover { background: var(--accent-hover); }
-        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .card { background: var(--bg-card); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color); }
         .card-title { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px; }
         .card-value { font-size: 1.3rem; font-weight: 700; }
+        .card-desc { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tabs-container { overflow-x: auto; margin-bottom: 20px; }
         .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
         .tab-btn { background: none; border: none; padding: 8px 14px; border-radius: 6px; color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
@@ -176,6 +177,11 @@
             <div class="card">
                 <div class="card-title">Balanço Líquido</div>
                 <div class="card-value" id="cardBalanco">R$ 0,00</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Maior Gasto</div>
+                <div class="card-value val-saida" id="cardMaiorGasto">R$ 0,00</div>
+                <div class="card-desc" id="cardMaiorGastoDesc">-</div>
             </div>
         </div>
 
@@ -338,7 +344,6 @@
                 driveItemId = select.value;
                 const selectedText = select.options[select.selectedIndex].text;
                 
-                // Extrai o ano do nome do ficheiro (ex: "Gastos 2026 Bancos.xlsx" -> 2026)
                 const matchYear = selectedText.match(/\b(20\d\d)\b/);
                 if (matchYear) {
                     currentYear = matchYear[1];
@@ -565,20 +570,36 @@
                 document.getElementById('cardEntradas').textContent = "R$ 0,00";
                 document.getElementById('cardSaidas').textContent = "R$ 0,00";
                 document.getElementById('cardBalanco').textContent = "R$ 0,00";
+                document.getElementById('cardMaiorGasto').textContent = "R$ 0,00";
+                document.getElementById('cardMaiorGastoDesc').textContent = "-";
                 return;
             }
 
             let totalEntradas = 0;
             let totalSaidas = 0;
+            let maiorGastoValor = 0;
+            let maiorGastoDesc = "-";
             let ultimoSaldo = filteredRecords.length ? filteredRecords[filteredRecords.length - 1].saldo : 0;
 
             filteredRecords.forEach((rec, i) => {
                 const val = parseFloat(rec.valor) || 0;
-                if (val < 0) totalEntradas += Math.abs(val);
-                else totalSaidas += val;
+                const isSaldoInicial = rec.historico === "Saldo Inicial" || rec.data === "Saldo Inicial";
+
+                if (!isSaldoInicial) {
+                    if (val < 0) {
+                        totalEntradas += Math.abs(val);
+                    } else if (val > 0) {
+                        totalSaidas += val;
+                        if (val > maiorGastoValor) {
+                            maiorGastoValor = val;
+                            const dBR = formatDateBR(rec.data);
+                            const hText = rec.historico || "Sem descrição";
+                            maiorGastoDesc = dBR && dBR !== '-' ? `${dBR} - ${hText}` : hText;
+                        }
+                    }
+                }
 
                 const displayDate = formatDateBR(rec.data);
-                const isSaldoInicial = rec.historico === "Saldo Inicial" || rec.data === "Saldo Inicial";
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -601,6 +622,8 @@
             document.getElementById('cardEntradas').textContent = `R$ ${totalEntradas.toFixed(2)}`;
             document.getElementById('cardSaidas').textContent = `R$ ${totalSaidas.toFixed(2)}`;
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
+            document.getElementById('cardMaiorGasto').textContent = `R$ ${maiorGastoValor.toFixed(2)}`;
+            document.getElementById('cardMaiorGastoDesc').textContent = maiorGastoDesc;
         }
 
         async function openAddModal() {
