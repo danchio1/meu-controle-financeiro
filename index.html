@@ -152,13 +152,10 @@
                 <span class="sync-badge" id="syncBadge">🔌 OneDrive Desconectado</span>
                 <button id="msLoginBtn" onclick="loginMicrosoft()" style="background: #0078d4; color: white; border: none; font-weight: 600;">🔑 Entrar na Conta Microsoft</button>
                 
-                <!-- Caixa de Seleção Filtrada -->
+                <!-- Caixa de Seleção da Planilha -->
                 <select id="fileSelect" onchange="selectOneDriveFile()" style="display:none; font-weight: 600; border-color: var(--accent);"></select>
 
-                <select id="yearSelect" onchange="changeYear()"></select>
-                <button onclick="addYear()">+ Novo Ano</button>
                 <button class="btn-primary" onclick="openAddModal()">+ Lançamento</button>
-                <button onclick="exportData()">💾 Backup Local (JSON)</button>
                 <button onclick="toggleTheme()">🌓 Tema</button>
             </div>
         </header>
@@ -235,7 +232,6 @@
     <script>
         const APP_PASSWORD = "17Junho00!";
         const CLIENT_ID = "8c126e58-62a2-4fe7-83cd-32acef45f833";
-        const FILE_NAME = "Gastos 2026 Bancos.xlsx";
 
         const msalConfig = {
             auth: {
@@ -340,6 +336,19 @@
             const select = document.getElementById('fileSelect');
             if (select.value) {
                 driveItemId = select.value;
+                const selectedText = select.options[select.selectedIndex].text;
+                
+                // Extrai o ano do nome do ficheiro (ex: "Gastos 2026 Bancos.xlsx" -> 2026)
+                const matchYear = selectedText.match(/\b(20\d\d)\b/);
+                if (matchYear) {
+                    currentYear = matchYear[1];
+                }
+                
+                if (!db[currentYear]) {
+                    db[currentYear] = {};
+                    months.forEach(m => db[currentYear][m] = []);
+                }
+                
                 await loadFromOneDrive();
             }
         }
@@ -370,6 +379,10 @@
                 
                 if (data.values && data.values.length > 1) {
                     const rows = data.values.slice(1);
+                    if (!db[currentYear]) {
+                        db[currentYear] = {};
+                        months.forEach(m => db[currentYear][m] = []);
+                    }
                     db[currentYear][monthName] = [];
                     let hasSaldoInicial = false;
 
@@ -418,25 +431,16 @@
         }
 
         const months = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
-        let currentYear = 2026;
+        let currentYear = String(new Date().getFullYear());
         let currentMonthIdx = 0;
 
-        const emptyData = {
-            "2026": {
-                "JANEIRO": [], "FEVEREIRO": [], "MARÇO": [], "ABRIL": [],
-                "MAIO": [], "JUNHO": [], "JULHO": [], "AGOSTO": [],
-                "SETEMBRO": [], "OUTUBRO": [], "NOVEMBRO": [], "DEZEMBRO": []
-            }
-        };
-
-        let db = emptyData;
+        let db = {};
 
         function init() {
             if (!db[currentYear]) {
                 db[currentYear] = {};
                 months.forEach(m => db[currentYear][m] = []);
             }
-            renderYearSelect();
             renderTabs();
             renderData();
         }
@@ -494,19 +498,6 @@
                     currentSaldo = currentSaldo - val;
                     item.saldo = currentSaldo;
                 }
-            });
-        }
-
-        function renderYearSelect() {
-            const select = document.getElementById('yearSelect');
-            select.innerHTML = '';
-            const years = Object.keys(db).sort();
-            years.forEach(y => {
-                const opt = document.createElement('option');
-                opt.value = y;
-                opt.textContent = y;
-                if (y == currentYear) opt.selected = true;
-                select.appendChild(opt);
             });
         }
 
@@ -569,7 +560,7 @@
             });
 
             if (filteredRecords.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento encontrado com os filtros selecionados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-notice">Nenhum lançamento exibido. Conecte ao OneDrive e selecione a planilha de Gastos.</td></tr>`;
                 document.getElementById('cardSaldo').textContent = "R$ 0,00";
                 document.getElementById('cardEntradas').textContent = "R$ 0,00";
                 document.getElementById('cardSaidas').textContent = "R$ 0,00";
@@ -612,14 +603,12 @@
             document.getElementById('cardBalanco').textContent = `R$ ${(totalEntradas - totalSaidas).toFixed(2)}`;
         }
 
-        // Função de Adicionar com a DATA DE HOJE dinâmica como padrão
         async function openAddModal() {
             const now = new Date();
             const todayDay = String(now.getDate()).padStart(2, '0');
             const todayMonth = String(now.getMonth() + 1).padStart(2, '0');
-            const todayYear = now.getFullYear();
+            const todayYear = currentYear || now.getFullYear();
             
-            // Padrão automático: data de hoje (ex: 26/10/2026)
             const defaultPromptDate = `${todayDay}/${todayMonth}/${todayYear}`;
 
             const dtPrompt = prompt(`Data do registro (ex: 25 para dia 25 do mês ou DD/MM/AAAA):`, defaultPromptDate);
@@ -647,6 +636,10 @@
             const val = parseFloat(valStr.replace(',', '.')) || 0;
             const monthName = months[currentMonthIdx];
 
+            if (!db[currentYear]) {
+                db[currentYear] = {};
+                months.forEach(m => db[currentYear][m] = []);
+            }
             if (!db[currentYear][monthName]) db[currentYear][monthName] = [];
             
             if (accessToken && driveItemId) {
@@ -800,32 +793,6 @@
                     renderData();
                 }
             }
-        }
-
-        function changeYear() {
-            currentYear = document.getElementById('yearSelect').value;
-            renderData();
-        }
-
-        function addYear() {
-            const y = prompt("Digite o ano desejado (ex: 2025 ou 2027):");
-            if (y && !db[y]) {
-                db[y] = {};
-                months.forEach(m => db[y][m] = []);
-                currentYear = y;
-                renderYearSelect();
-                renderData();
-            }
-        }
-
-        function exportData() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `financeiro_backup.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
         }
 
         function toggleTheme() {
