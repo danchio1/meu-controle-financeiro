@@ -175,7 +175,7 @@
                         <th>Descrição / Histórico</th>
                         <th>Valor (R$)</th>
                         <th>Saldo Resultante</th>
-                        <th>Tipo (Manual / Débito / DDA / Pix / Transfer / Ganho)</th>
+                        <th>Tipo (Opcional)</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -340,7 +340,8 @@
                         const rawHist = r[1] ? String(r[1]).trim() : "";
                         const rawVal = parseFloat(r[2]) || 0;
                         const rawSaldo = parseFloat(r[3]) || 0;
-                        const rawTipo = r[4] ? String(r[4]).trim() : "Manual";
+                        // Mantém em branco caso a célula no Excel esteja vazia
+                        const rawTipo = r[4] ? String(r[4]).trim() : "";
 
                         if (!rawDate && !rawHist && rawVal === 0 && rawSaldo === 0) return;
 
@@ -426,6 +427,19 @@
                 }
             }
             return isoDate;
+        }
+
+        function parseTipoInput(tipoInput) {
+            if (tipoInput === null || tipoInput === undefined) return "";
+            let tClean = String(tipoInput).trim().toLowerCase();
+            if (tClean === "") return "";
+            if (tClean === "1" || tClean === "manual") return "Manual";
+            if (tClean === "2" || tClean === "débito" || tClean === "debito") return "Débito";
+            if (tClean === "3" || tClean === "dda") return "DDA";
+            else if (tClean === "4" || tClean === "pix") return "Pix";
+            else if (tClean === "5" || tClean === "transfer" || tClean === "transferência" || tClean === "transferencia") return "Transfer";
+            else if (tClean === "6" || tClean === "ganho") return "Ganho";
+            return String(tipoInput).trim();
         }
 
         function recalculateSaldos(monthName) {
@@ -589,16 +603,8 @@
             const valStr = prompt("Valor em R$ (Exemplo: 50 para gasto, -50 para salário/rendimento):");
             if (valStr === null) return;
 
-            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n5 - Transfer\n6 - Ganho\n\n(Digite o número ou o nome da opção):", "1");
-            if (tipoInput === null) return;
-
-            let tipo = "Manual";
-            let tClean = tipoInput.trim().toLowerCase();
-            if (tClean === "2" || tClean === "débito" || tClean === "debito") tipo = "Débito";
-            else if (tClean === "3" || tClean === "dda") tipo = "DDA";
-            else if (tClean === "4" || tClean === "pix") tipo = "Pix";
-            else if (tClean === "5" || tClean === "transfer" || tClean === "transferência" || tClean === "transferencia") tipo = "Transfer";
-            else if (tClean === "6" || tClean === "ganho") tipo = "Ganho";
+            let tipoInput = prompt("Tipo do Pagamento (OPCIONAL - deixe em branco se não quiser preencher):\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n5 - Transfer\n6 - Ganho", "");
+            let tipo = parseTipoInput(tipoInput);
 
             const val = parseFloat(valStr.replace(',', '.')) || 0;
             const monthName = months[currentMonthIdx];
@@ -672,23 +678,10 @@
             const newValStr = prompt("Editar Valor em R$ (Negativo para entrada, Positivo para gasto):", item.valor);
             if (newValStr === null) return;
 
-            let defaultVal = "1";
-            if (item.tipo === "Débito") defaultVal = "2";
-            else if (item.tipo === "DDA") defaultVal = "3";
-            else if (item.tipo === "Pix") defaultVal = "4";
-            else if (item.tipo === "Transfer") defaultVal = "5";
-            else if (item.tipo === "Ganho") defaultVal = "6";
+            let defaultVal = item.tipo || "";
 
-            let tipoInput = prompt("Escolha o Tipo do Pagamento:\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n5 - Transfer\n6 - Ganho\n\n(Digite o número ou o nome da opção):", defaultVal);
-            if (tipoInput === null) return;
-
-            let newTipo = "Manual";
-            let tClean = tipoInput.trim().toLowerCase();
-            if (tClean === "2" || tClean === "débito" || tClean === "debito") newTipo = "Débito";
-            else if (tClean === "3" || tClean === "dda") newTipo = "DDA";
-            else if (tClean === "4" || tClean === "pix") newTipo = "Pix";
-            else if (tClean === "5" || tClean === "transfer" || tClean === "transferência" || tClean === "transferencia") newTipo = "Transfer";
-            else if (tClean === "6" || tClean === "ganho") newTipo = "Ganho";
+            let tipoInput = prompt("Editar Tipo do Pagamento (OPCIONAL - apague para deixar em branco):\n1 - Manual\n2 - Débito\n3 - DDA\n4 - Pix\n5 - Transfer\n6 - Ganho", defaultVal);
+            let newTipo = (tipoInput === null) ? defaultVal : parseTipoInput(tipoInput);
 
             const valParsed = parseFloat(String(newValStr).replace(',', '.')) || 0;
 
